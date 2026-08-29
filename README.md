@@ -129,7 +129,10 @@ On a photo clip it is the letterbox colour; on a title card it is the backdrop.
 
 **`logo`** — `path`, `position` (`top-left`/`top-right`/`bottom-left`/
 `bottom-right`), `height`, `opacity`, `margin`. Held over the whole video,
-transparency preserved.
+transparency preserved. It needs a PNG with a real alpha channel: a logo saved
+with its background baked in will overlay as a solid rectangle. A logo that
+only exists on a solid background is better used as its own opening clip, with
+`background` set to match it — see `examples/eaglehitech-promo.json`.
 
 **`motion`** (still images only) — `none`, `zoom-in`, `zoom-out`, `pan-left`,
 `pan-right`, `pan-up`, `pan-down`, `random`. `zoom` sets how far the move
