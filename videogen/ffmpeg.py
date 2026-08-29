@@ -11,6 +11,9 @@ import sys
 from dataclasses import dataclass
 
 
+_DRAWTEXT_OPTIONS: dict[tuple[str, str], bool] = {}
+
+
 class FFmpegError(RuntimeError):
     """Raised when ffmpeg/ffprobe is missing, or exits non-zero."""
 
@@ -39,6 +42,23 @@ class Tools:
     @classmethod
     def discover(cls, ffmpeg: str | None = None, ffprobe: str | None = None) -> "Tools":
         return cls(_find("ffmpeg", ffmpeg), _find("ffprobe", ffprobe))
+
+    def supports_drawtext_option(self, name: str) -> bool:
+        """Whether this build's drawtext accepts `name`.
+
+        `text_align` only exists on newer builds, and passing it to an older
+        one is a hard error rather than a warning.
+        """
+        key = (self.ffmpeg, name)
+        if key not in _DRAWTEXT_OPTIONS:
+            help_text = subprocess.run(
+                [self.ffmpeg, "-hide_banner", "-h", "filter=drawtext"],
+                capture_output=True, text=True, check=False,
+            ).stdout
+            _DRAWTEXT_OPTIONS[key] = bool(
+                re.search(rf"^\s+{re.escape(name)}\s", help_text, re.M)
+            )
+        return _DRAWTEXT_OPTIONS[key]
 
     def has_filter(self, name: str) -> bool:
         out = subprocess.run(
@@ -117,27 +137,25 @@ def run(tools: Tools, args: list[str], *, total_seconds: float | None = None,
     """Run ffmpeg, streaming a one-line progress readout to stderr."""
     cmd = [tools.ffmpeg, "-hide_banner", "-nostdin", "-loglevel", "error",
            "-progress", "pipe:1", "-stats_period", "0.5", *args]
-    proc = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
-    )
-    assert proc.stdout is not None
     interactive = sys.stderr.isatty()
-    for line in proc.stdout:
-        if quiet or not line.startswith("out_time_ms="):
-            continue
-        try:
-            done = int(line.split("=", 1)[1]) / 1_000_000
-        except ValueError:
-            continue
-        if total_seconds:
-            pct = min(100.0, done / total_seconds * 100)
-            msg = f"  encoding {pct:5.1f}%  ({done:.1f}s / {total_seconds:.1f}s)"
-        else:
-            msg = f"  encoding {done:.1f}s"
-        end = "\r" if interactive else "\n"
-        print(msg, end=end, file=sys.stderr, flush=True)
-    stderr = proc.stderr.read() if proc.stderr else ""
-    proc.wait()
+    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          text=True, bufsize=1) as proc:
+        assert proc.stdout is not None
+        for line in proc.stdout:
+            if quiet or not line.startswith("out_time_ms="):
+                continue
+            try:
+                done = int(line.split("=", 1)[1]) / 1_000_000
+            except ValueError:
+                continue
+            if total_seconds:
+                pct = min(100.0, done / total_seconds * 100)
+                msg = f"  encoding {pct:5.1f}%  ({done:.1f}s / {total_seconds:.1f}s)"
+            else:
+                msg = f"  encoding {done:.1f}s"
+            end = "\r" if interactive else "\n"
+            print(msg, end=end, file=sys.stderr, flush=True)
+        stderr = proc.stderr.read() if proc.stderr else ""
     if not quiet and interactive:
         print(file=sys.stderr)
     if proc.returncode != 0:

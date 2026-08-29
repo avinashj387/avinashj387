@@ -12,6 +12,12 @@ NARRATION_TAIL = 0.5
 FALLBACK_DURATION = 4.0
 
 
+# A title card's backdrop is generated at render time, so it is described
+# rather than probed.
+TITLE_INFO = MediaInfo("<title>", has_video=True, has_audio=False,
+                       width=None, height=None, duration=None)
+
+
 @dataclass
 class ResolvedClip:
     index: int
@@ -21,10 +27,17 @@ class ResolvedClip:
     motion: str
     start: float = 0.0
     input_index: int = -1
+    # The file ffmpeg actually reads. For a title card this is filled in with
+    # the generated backdrop once it has been rendered.
+    source_path: str = ""
     narration_info: MediaInfo | None = None
     narration_input_index: int | None = None
     # Crossfade to the following clip, after clamping. None until laid out.
     transition_out: float | None = None
+
+    @property
+    def is_title(self) -> bool:
+        return self.clip.title is not None
 
     @property
     def is_still(self) -> bool:
@@ -45,6 +58,7 @@ class Timeline:
     clips: list[ResolvedClip]
     total: float
     music_input_index: int | None = None
+    logo_input_index: int | None = None
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -60,6 +74,10 @@ def resolve(spec: Spec, tools: Tools) -> Timeline:
     resolved: list[ResolvedClip] = []
 
     for index, clip in enumerate(spec.clips):
+        if clip.title is not None:
+            resolved.append(_title_clip(spec, clip, index, notes))
+            continue
+
         info = probe(tools, clip.path)
         if not info.has_video:
             raise SpecError(
@@ -76,6 +94,7 @@ def resolve(spec: Spec, tools: Tools) -> Timeline:
         motion = spec.resolve_motion(clip, index) if info.is_still else "none"
         resolved.append(ResolvedClip(index=index, clip=clip, info=info,
                                      duration=duration, motion=motion,
+                                     source_path=clip.path,
                                      narration_info=narration_info))
 
     _clamp_transitions(spec, resolved, notes)
@@ -83,9 +102,26 @@ def resolve(spec: Spec, tools: Tools) -> Timeline:
     _assign_input_indices(spec, resolved)
 
     timeline = Timeline(spec=spec, clips=resolved, total=total, warnings=notes)
+    cursor = _next_index(resolved)
     if spec.music is not None:
-        timeline.music_input_index = _next_index(resolved)
+        timeline.music_input_index = cursor
+        cursor += 1
+    if spec.logo is not None:
+        timeline.logo_input_index = cursor
     return timeline
+
+
+def _title_clip(spec: Spec, clip: Clip, index: int,
+                notes: list[str]) -> ResolvedClip:
+    duration = clip.duration
+    if duration == AUTO:
+        notes.append(
+            f"clip {index} (title card): duration 'auto' has nothing to measure; "
+            f"falling back to {FALLBACK_DURATION}s"
+        )
+        duration = FALLBACK_DURATION
+    return ResolvedClip(index=index, clip=clip, info=TITLE_INFO,
+                        duration=float(duration), motion=clip.motion)
 
 
 def _duration_for(clip: Clip, index: int, info: MediaInfo,

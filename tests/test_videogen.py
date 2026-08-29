@@ -17,7 +17,8 @@ from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from videogen import graph, manifest, timeline  # noqa: E402
+from videogen import graph, manifest, textfit, timeline  # noqa: E402
+from videogen.build import _backdrop_source  # noqa: E402
 from videogen.ffmpeg import MediaInfo, Tools  # noqa: E402
 from videogen.manifest import Spec, SpecError  # noqa: E402
 
@@ -334,6 +335,189 @@ class Filtergraph(unittest.TestCase):
         command = self.build(spec, {"a.jpg": STILL})
         self.assertIn("-loop", command.inputs)
         self.assertIn("3.0000", command.inputs)
+
+
+class TitleCards(unittest.TestCase):
+    def build(self, spec, mapping=None):
+        result = resolve(spec, mapping or {})
+        workdir = tempfile.mkdtemp(prefix="videogen-title-")
+        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
+        for clip in result.clips:
+            if clip.is_title:
+                clip.source_path = os.path.join(workdir, f"backdrop_{clip.index}.png")
+        self.workdir = workdir
+        return graph.build(result, workdir)
+
+    def test_a_clip_needs_either_a_path_or_a_title(self):
+        with self.assertRaisesRegex(SpecError, "needs either"):
+            Spec.parse({"clips": [{"duration": 3}]})
+
+    def test_a_clip_cannot_be_both(self):
+        with self.assertRaisesRegex(SpecError, "one or the other"):
+            Spec.parse({"clips": [{"path": "a.jpg", "title": "hi"}]})
+
+    def test_title_defaults_to_no_motion(self):
+        spec = Spec.parse({"clips": [{"title": "Hello"}], "motion": "zoom-in"})
+        self.assertEqual(spec.clips[0].motion, "none")
+
+    def test_top_level_title_block_is_style_only(self):
+        spec = Spec.parse({"clips": [{"title": "Hello"}],
+                           "title": {"headline_size": 120}})
+        self.assertEqual(spec.clips[0].title.headline_size, 120)
+        self.assertEqual(spec.clips[0].title.headline, "Hello")
+
+    def test_clip_title_requires_a_headline(self):
+        with self.assertRaisesRegex(SpecError, "non-empty"):
+            Spec.parse({"clips": [{"title": {"subhead": "only a subhead"}}]})
+
+    def test_title_draws_headline_and_subhead(self):
+        spec = Spec.parse({"clips": [
+            {"title": {"headline": "Big", "subhead": "Small"}}]})
+        text = self.build(spec).filtergraph
+        self.assertEqual(text.count("drawtext"), 2)
+        for name in ("title_0_headline.txt", "title_0_subhead.txt"):
+            self.assertTrue(os.path.isfile(os.path.join(self.workdir, name)))
+
+    def test_title_without_subhead_draws_one_layer(self):
+        spec = Spec.parse({"clips": [{"title": "Only a headline"}]})
+        self.assertEqual(self.build(spec).filtergraph.count("drawtext"), 1)
+
+    def test_title_text_goes_to_sidecar_files(self):
+        spec = Spec.parse({"clips": [{"title": "Colons: and 'quotes'"}]})
+        self.assertNotIn("Colons", self.build(spec).filtergraph)
+
+    def test_gradient_background_is_not_used_as_a_pad_colour(self):
+        # "gradient:..." is not a colour ffmpeg would accept on pad.
+        spec = Spec.parse({"clips": [{"title": "Hi",
+                                      "background": "gradient:#000,#fff"}]})
+        self.assertNotIn("color=gradient", self.build(spec).filtergraph)
+
+    def test_clip_background_overrides_the_spec_background(self):
+        spec = Spec.parse({"clips": [{"path": "a.jpg", "background": "#ff0000"}],
+                           "background": "black"})
+        text = self.build(spec, {"a.jpg": STILL}).filtergraph
+        self.assertIn("color=#ff0000", text)
+
+    def test_backdrop_source_for_a_solid_colour(self):
+        self.assertEqual(_backdrop_source("#0a2540", 1920, 1080),
+                         "color=c=#0a2540:s=1920x1080")
+
+    def test_backdrop_source_for_a_gradient(self):
+        source = _backdrop_source("gradient:#000000,#ffffff", 1920, 1080)
+        self.assertIn("gradients=s=1920x1080", source)
+        self.assertIn("c0=#000000", source)
+        self.assertIn("c1=#ffffff", source)
+        self.assertIn("n=2", source)
+
+    def test_gradient_needs_at_least_two_colours(self):
+        with self.assertRaisesRegex(ValueError, "at least two"):
+            _backdrop_source("gradient:#000000", 1920, 1080)
+
+    def test_gradient_rejects_too_many_colours(self):
+        with self.assertRaisesRegex(ValueError, "at most 8"):
+            _backdrop_source("gradient:" + ",".join(["#000"] * 9), 1920, 1080)
+
+
+class LogoOverlay(unittest.TestCase):
+    def build(self, spec, mapping):
+        result = resolve(spec, mapping)
+        workdir = tempfile.mkdtemp(prefix="videogen-logo-")
+        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
+        return graph.build(result, workdir)
+
+    def spec_with(self, **logo):
+        return Spec.parse({"clips": ["a.jpg"], "logo": {"path": "l.png", **logo}})
+
+    def test_logo_is_scaled_faded_and_overlaid_last(self):
+        command = self.build(self.spec_with(height=80, opacity=0.5),
+                             {"a.jpg": STILL})
+        self.assertIn("scale=-1:80", command.filtergraph)
+        self.assertIn("colorchannelmixer=aa=0.5000", command.filtergraph)
+        self.assertEqual(command.video_label, "vout")
+
+    def test_each_corner_maps_to_the_right_expression(self):
+        def overlay(position):
+            text = self.build(self.spec_with(position=position, margin=20),
+                              {"a.jpg": STILL}).filtergraph
+            return text.split("overlay=")[1].split(":format")[0]
+        self.assertEqual(overlay("top-left"), "20:20")
+        self.assertEqual(overlay("top-right"), "main_w-overlay_w-20:20")
+        self.assertEqual(overlay("bottom-left"), "20:main_h-overlay_h-20")
+        self.assertEqual(overlay("bottom-right"),
+                         "main_w-overlay_w-20:main_h-overlay_h-20")
+
+    def test_no_logo_means_no_overlay(self):
+        command = self.build(Spec.parse({"clips": ["a.jpg"]}), {"a.jpg": STILL})
+        self.assertNotIn("overlay", command.filtergraph)
+
+    def test_logo_rejects_an_unknown_corner(self):
+        with self.assertRaisesRegex(SpecError, "spec.logo.position"):
+            Spec.parse({"clips": ["a.jpg"],
+                        "logo": {"path": "l.png", "position": "middle"}})
+
+
+class TextFitting(unittest.TestCase):
+    """The measurement itself shells out to ffmpeg; the arithmetic does not."""
+
+    class StubFitter(textfit.TextFitter):
+        def __init__(self, widths):
+            self.widths = widths          # text -> width at REFERENCE_SIZE
+            self._widths = {}
+
+        def width_at_reference(self, text):
+            return self.widths.get(text, 0)
+
+    def test_text_that_fits_is_left_alone(self):
+        fitter = self.StubFitter({"short": 200})
+        self.assertEqual(fitter.fit("short", 96, 1000), 96)
+
+    def test_overlong_text_is_shrunk_to_the_usable_width(self):
+        # 800px at size 40 means size 50 exactly fills 1000px.
+        fitter = self.StubFitter({"long": 800})
+        self.assertEqual(fitter.fit("long", 96, 1000), 50)
+
+    def test_an_unmeasurable_string_keeps_its_requested_size(self):
+        self.assertEqual(self.StubFitter({}).fit("x", 96, 1000), 96)
+
+    def test_blank_text_keeps_its_requested_size(self):
+        self.assertEqual(self.StubFitter({}).fit("   ", 96, 1000), 96)
+
+    def test_ink_width_measures_the_drawn_span(self):
+        # 10px wide, 2 rows; ink in columns 3..6 of the second row.
+        frame = bytes([0] * 10) + bytes([0, 0, 0, 9, 9, 9, 9, 0, 0, 0])
+        self.assertEqual(textfit._ink_width(frame, 10, 2), 4)
+
+    def test_ink_width_of_a_blank_frame_is_zero(self):
+        self.assertEqual(textfit._ink_width(bytes(20), 10, 2), 0)
+
+    def test_subhead_shrinks_with_the_headline(self):
+        # Fitting the two independently can leave the subhead the larger of the
+        # two, which inverts the hierarchy.
+        spec = Spec.parse({"clips": [{"title": {
+            "headline": "H" , "subhead": "S",
+            "headline_size": 96, "subhead_size": 44}}], "width": 1280})
+        fitter = self.StubFitter({"H": 2000, "S": 100})
+        workdir = tempfile.mkdtemp(prefix="videogen-fit-")
+        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
+        result = resolve(spec, {})
+        for clip in result.clips:
+            clip.source_path = os.path.join(workdir, "b.png")
+        text = graph.build(result, workdir, fitter=fitter).filtergraph
+        sizes = [int(part.split(":")[0])
+                 for part in text.split("fontsize=")[1:]]
+        self.assertEqual(len(sizes), 2)
+        self.assertLess(sizes[1], sizes[0])
+
+    def test_captions_are_fitted_too(self):
+        spec = Spec.parse({"clips": [{"path": "a.jpg",
+                                      "caption": {"text": "C", "size": 96}}],
+                           "width": 1280})
+        workdir = tempfile.mkdtemp(prefix="videogen-fitc-")
+        self.addCleanup(shutil.rmtree, workdir, ignore_errors=True)
+        result = resolve(spec, {"a.jpg": STILL})
+        text = graph.build(result, workdir,
+                           fitter=self.StubFitter({"C": 4000})).filtergraph
+        self.assertIn("fontsize=11:", text)
 
 
 class PathEscaping(unittest.TestCase):

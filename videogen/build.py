@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 import tempfile
 from dataclasses import dataclass
 
 from . import graph
-from .ffmpeg import Tools, run
+from .ffmpeg import FFmpegError, Tools, run
 from .manifest import Spec
+from .textfit import TextFitter
 from .timeline import Timeline, resolve
 
 PRESETS = {
@@ -43,7 +45,12 @@ def render(spec: Spec, output: str, *, tools: Tools | None = None,
     timeline = resolve(spec, tools)
     workdir = tempfile.mkdtemp(prefix="videogen-")
     try:
-        command = graph.build(timeline, workdir, supersample=supersample)
+        _render_backdrops(tools, spec, timeline, workdir)
+        fitter = TextFitter(tools, graph.find_font(spec.font))
+        command = graph.build(
+            timeline, workdir, supersample=supersample, fitter=fitter,
+            center_lines=tools.supports_drawtext_option("text_align"),
+        )
         if dump_graph:
             with open(dump_graph, "w", encoding="utf-8") as handle:
                 handle.write(command.filtergraph + "\n")
@@ -66,6 +73,54 @@ def render(spec: Spec, output: str, *, tools: Tools | None = None,
 
     return Result(output=output, duration=timeline.total,
                   clips=len(timeline.clips), warnings=timeline.warnings)
+
+
+def _render_backdrops(tools: Tools, spec: Spec, timeline: Timeline,
+                      workdir: str) -> None:
+    """Draw each title card's backdrop to a PNG.
+
+    `gradients` animates and cannot be stilled, so a single frame is captured
+    up front. That also lets a title card reuse the ordinary still-image path.
+    """
+    for clip in timeline.clips:
+        if not clip.is_title:
+            continue
+        background = clip.clip.background or spec.background
+        path = os.path.join(workdir, f"backdrop_{clip.index}.png")
+        source = _backdrop_source(background, spec.width, spec.height)
+        result = subprocess.run(
+            [tools.ffmpeg, "-hide_banner", "-v", "error", "-y",
+             "-f", "lavfi", "-i", source, "-frames:v", "1", path],
+            capture_output=True, text=True, check=False,
+        )
+        if result.returncode != 0:
+            raise FFmpegError(
+                f"could not draw the backdrop for clip {clip.index} "
+                f"(background {background!r}):\n{result.stderr.strip()}"
+            )
+        clip.source_path = path
+
+
+def _backdrop_source(background: str, width: int, height: int) -> str:
+    """An lavfi source describing a solid colour or a linear gradient."""
+    if not background.startswith(graph.GRADIENT_PREFIX):
+        return f"color=c={background}:s={width}x{height}"
+
+    colors = [part.strip() for part
+              in background[len(graph.GRADIENT_PREFIX):].split(",")
+              if part.strip()]
+    if len(colors) < 2:
+        raise ValueError(
+            f"background {background!r}: a gradient needs at least two colours, "
+            'e.g. "gradient:#0a2540,#1a4d7a"'
+        )
+    if len(colors) > 8:
+        raise ValueError(
+            f"background {background!r}: a gradient takes at most 8 colours"
+        )
+    stops = ":".join(f"c{i}={color}" for i, color in enumerate(colors))
+    return (f"gradients=s={width}x{height}:{stops}:n={len(colors)}"
+            f":x0=0:y0=0:x1={width}:y1={height}")
 
 
 def _encode_args(spec: Spec, timeline: Timeline, command: graph.Command,

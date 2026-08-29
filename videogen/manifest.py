@@ -25,6 +25,8 @@ TRANSITIONS = ("none", "fade", "fadeblack", "fadewhite", "wipeleft", "wiperight"
 
 POSITIONS = ("bottom", "top", "center")
 
+CORNERS = ("top-left", "top-right", "bottom-left", "bottom-right")
+
 IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tif", ".tiff", ".gif")
 VIDEO_SUFFIXES = (".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v")
 
@@ -129,6 +131,89 @@ class Caption:
 
 
 @dataclass(frozen=True)
+class Title:
+    """A generated text slide: no photograph required."""
+
+    headline: str
+    subhead: str | None = None
+    headline_size: int = 96
+    subhead_size: int = 44
+    color: str = "white"
+    subhead_color: str = "#c8d4e0"
+    gap: int = 36
+
+    @classmethod
+    def parse(cls, data: object, where: str, defaults: "Title | None",
+              *, require_headline: bool = True) -> "Title | None":
+        """Parse a title. At the top level `require_headline` is False, because
+        that block only carries styling for the title cards on individual clips."""
+        if data is None:
+            return None
+        base = defaults or cls(headline="")
+        if isinstance(data, str):
+            return replace(base, headline=data)
+        _check(isinstance(data, dict), where, "expected an object or a string")
+        assert isinstance(data, dict)
+        _unknown_keys(data, {"headline", "subhead", "headline_size",
+                             "subhead_size", "color", "subhead_color", "gap"},
+                      where)
+        headline = data.get("headline", base.headline)
+        _check(isinstance(headline, str), f"{where}.headline", "expected a string")
+        if require_headline:
+            _check(str(headline).strip() != "", f"{where}.headline",
+                   "title headline must be a non-empty string")
+        subhead = data.get("subhead", base.subhead)
+        _check(subhead is None or isinstance(subhead, str),
+               f"{where}.subhead", "expected a string")
+        return cls(
+            headline=str(headline),
+            subhead=str(subhead) if subhead else None,
+            headline_size=int(_number(data.get("headline_size",
+                                               base.headline_size),
+                                      f"{where}.headline_size", minimum=1)),
+            subhead_size=int(_number(data.get("subhead_size", base.subhead_size),
+                                     f"{where}.subhead_size", minimum=1)),
+            color=str(data.get("color", base.color)),
+            subhead_color=str(data.get("subhead_color", base.subhead_color)),
+            gap=int(_number(data.get("gap", base.gap), f"{where}.gap", minimum=0)),
+        )
+
+
+@dataclass(frozen=True)
+class Logo:
+    """A watermark held over the whole video."""
+
+    path: str
+    position: str = "top-right"
+    height: int = 90
+    opacity: float = 0.9
+    margin: int = 48
+
+    @classmethod
+    def parse(cls, data: object, where: str, base_dir: str) -> "Logo | None":
+        if data is None:
+            return None
+        if isinstance(data, str):
+            data = {"path": data}
+        _check(isinstance(data, dict), where, "expected an object or a path string")
+        assert isinstance(data, dict)
+        _unknown_keys(data, {"path", "position", "height", "opacity", "margin"},
+                      where)
+        _check("path" in data, where, "missing required field 'path'")
+        return cls(
+            path=_resolve(data["path"], base_dir, f"{where}.path"),
+            position=_one_of(data.get("position", "top-right"), CORNERS,
+                             f"{where}.position"),
+            height=int(_number(data.get("height", 90), f"{where}.height",
+                               minimum=1)),
+            opacity=_number(data.get("opacity", 0.9), f"{where}.opacity",
+                            minimum=0),
+            margin=int(_number(data.get("margin", 48), f"{where}.margin",
+                               minimum=0)),
+        )
+
+
+@dataclass(frozen=True)
 class Music:
     path: str
     volume: float = 0.25
@@ -162,7 +247,10 @@ class Music:
 
 @dataclass(frozen=True)
 class Clip:
+    # Empty for a title card, whose backdrop is generated rather than loaded.
     path: str
+    title: "Title | None" = None
+    background: str | None = None
     duration: float | str = 4.0
     motion: str = "random"
     zoom: float = 1.18
@@ -179,9 +267,14 @@ class Clip:
             data = {"path": data}
         _check(isinstance(data, dict), where, "expected an object or a path string")
         assert isinstance(data, dict)
-        _unknown_keys(data, {"path", "duration", "motion", "zoom", "caption",
-                             "narration", "start", "transition", "volume"}, where)
-        _check("path" in data, where, "missing required field 'path'")
+        _unknown_keys(data, {"path", "title", "background", "duration", "motion",
+                             "zoom", "caption", "narration", "start",
+                             "transition", "volume"}, where)
+        title = Title.parse(data.get("title"), f"{where}.title", defaults.title)
+        _check("path" in data or title is not None, where,
+               "needs either 'path' (an image or video) or 'title' (a text slide)")
+        _check(not ("path" in data and title is not None), where,
+               "has both 'path' and 'title'; a clip is one or the other")
 
         raw_duration = data.get("duration", defaults.duration)
         if isinstance(raw_duration, str):
@@ -195,10 +288,16 @@ class Clip:
         if narration is not None:
             narration = _resolve(narration, base_dir, f"{where}.narration")
 
+        # A title card is a flat backdrop; a Ken Burns move on it just wobbles.
+        default_motion = "none" if title is not None else defaults.motion
+
         return cls(
-            path=_resolve(data["path"], base_dir, f"{where}.path"),
+            path=_resolve(data["path"], base_dir, f"{where}.path")
+            if "path" in data else "",
+            title=title,
+            background=str(data["background"]) if data.get("background") else None,
             duration=duration,
-            motion=_one_of(data.get("motion", defaults.motion), MOTIONS,
+            motion=_one_of(data.get("motion", default_motion), MOTIONS,
                            f"{where}.motion"),
             zoom=_number(data.get("zoom", defaults.zoom), f"{where}.zoom", minimum=1.0),
             caption=Caption.parse(data.get("caption"), f"{where}.caption",
@@ -221,6 +320,7 @@ class Defaults:
     zoom: float = 1.18
     transition: Transition = field(default_factory=Transition)
     caption: Caption | None = None
+    title: "Title | None" = None
 
 
 @dataclass(frozen=True)
@@ -232,6 +332,7 @@ class Spec:
     background: str = "black"
     font: str | None = None
     music: Music | None = None
+    logo: Logo | None = None
     defaults: Defaults = field(default_factory=Defaults)
     seed: int | None = None
 
@@ -240,8 +341,8 @@ class Spec:
         _check(isinstance(data, dict), "spec", "expected a top-level object")
         assert isinstance(data, dict)
         _unknown_keys(data, {"clips", "width", "height", "fps", "background",
-                             "font", "music", "transition", "duration", "motion",
-                             "zoom", "caption", "seed"}, "spec")
+                             "font", "music", "logo", "transition", "duration",
+                             "motion", "zoom", "caption", "title", "seed"}, "spec")
         _check("clips" in data, "spec", "missing required field 'clips'")
         _check(isinstance(data["clips"], list) and data["clips"],
                "spec.clips", "expected a non-empty list of clips")
@@ -263,6 +364,8 @@ class Spec:
                                         Transition()),
             caption=Caption.parse(data.get("caption"), "spec.caption", None,
                                   require_text=False),
+            title=Title.parse(data.get("title"), "spec.title", None,
+                              require_headline=False),
         )
 
         font = data.get("font")
@@ -278,6 +381,7 @@ class Spec:
             background=str(data.get("background", "black")),
             font=font,
             music=Music.parse(data.get("music"), "spec.music", base_dir),
+            logo=Logo.parse(data.get("logo"), "spec.logo", base_dir),
             defaults=defaults,
             seed=int(data["seed"]) if data.get("seed") is not None else None,
         )

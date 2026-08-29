@@ -5,8 +5,14 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from .manifest import Caption, Spec
+from .manifest import Caption, Logo, Spec, Title
+from .textfit import TextFitter
 from .timeline import ResolvedClip, Timeline, transition_duration
+
+GRADIENT_PREFIX = "gradient:"
+
+# Fraction of the frame width kept clear either side of title and caption text.
+SIDE_MARGIN = 0.06
 
 SAMPLE_RATE = 48000
 AUDIO_FORMAT = (f"aformat=sample_fmts=fltp:sample_rates={SAMPLE_RATE}"
@@ -49,14 +55,25 @@ def find_font(explicit: str | None) -> str | None:
 
 def build(timeline: Timeline, workdir: str, *,
           supersample: int = DEFAULT_SUPERSAMPLE,
-          duck: bool = True) -> Command:
+          duck: bool = True, fitter: "TextFitter | None" = None,
+          center_lines: bool = False) -> Command:
+    """Assemble the ffmpeg inputs and filtergraph for `timeline`.
+
+    `fitter` shrinks over-long text to the frame; without one, sizes are used
+    exactly as given. `center_lines` centres each line of multi-line text, and
+    requires a build whose drawtext has `text_align`.
+    """
     spec = timeline.spec
     inputs = _input_args(timeline)
     chains: list[str] = []
 
-    labels = [_video_chain(spec, clip, workdir, supersample, chains)
+    labels = [_video_chain(spec, clip, workdir, supersample, chains, fitter,
+                           center_lines)
               for clip in timeline.clips]
     video_label = _stitch(spec, timeline, labels, chains)
+    if spec.logo is not None:
+        video_label = _overlay_logo(spec.logo, timeline.logo_input_index,
+                                    video_label, chains)
 
     audio_label = _audio_chains(timeline, chains, duck=duck)
 
@@ -74,11 +91,11 @@ def _input_args(timeline: Timeline) -> list[str]:
     for clip in timeline.clips:
         if clip.is_still:
             args += ["-loop", "1", "-framerate", str(timeline.spec.fps),
-                     "-t", f"{clip.duration:.4f}", "-i", clip.clip.path]
+                     "-t", f"{clip.duration:.4f}", "-i", clip.source_path]
         else:
             if clip.clip.start > 0:
                 args += ["-ss", f"{clip.clip.start:.4f}"]
-            args += ["-t", f"{clip.duration:.4f}", "-i", clip.clip.path]
+            args += ["-t", f"{clip.duration:.4f}", "-i", clip.source_path]
 
     for clip in timeline.clips:
         if clip.narration_input_index is not None:
@@ -92,6 +109,11 @@ def _input_args(timeline: Timeline) -> list[str]:
         if music.start > 0:
             args += ["-ss", f"{music.start:.4f}"]
         args += ["-i", music.path]
+
+    logo = timeline.spec.logo
+    if logo is not None:
+        args += ["-loop", "1", "-framerate", str(timeline.spec.fps),
+                 "-t", f"{timeline.total:.4f}", "-i", logo.path]
     return args
 
 
@@ -99,23 +121,42 @@ def _input_args(timeline: Timeline) -> list[str]:
 # video
 
 
+def _usable_width(spec: Spec) -> int:
+    return int(spec.width * (1 - 2 * SIDE_MARGIN))
+
+
+def _fit_size(fitter: "TextFitter | None", text: str, size: int,
+              spec: Spec) -> int:
+    return size if fitter is None else fitter.fit(text, size, _usable_width(spec))
+
+
 def _video_chain(spec: Spec, clip: ResolvedClip, workdir: str,
-                 supersample: int, chains: list[str]) -> str:
+                 supersample: int, chains: list[str],
+                 fitter: "TextFitter | None" = None,
+                 center_lines: bool = False) -> str:
     width, height = spec.width, spec.height
+    # A title card's backdrop is already exactly frame-sized, so its pad is a
+    # no-op — but "gradient:..." is not a colour ffmpeg would accept there.
+    background = pad_color(clip.clip.background or spec.background)
     steps: list[str] = []
 
     if clip.is_still and clip.motion != "none":
         big_w, big_h = width * supersample, height * supersample
-        steps += [_fit(big_w, big_h, spec.background), "setsar=1",
+        steps += [_fit(big_w, big_h, background), "setsar=1",
                   _zoompan(clip, spec, width, height)]
     else:
-        steps += [_fit(width, height, spec.background), "setsar=1"]
+        steps += [_fit(width, height, background), "setsar=1"]
 
     steps += [f"fps={spec.fps}", "format=pix_fmts=yuv420p",
               f"trim=duration={clip.duration:.4f}", "setpts=PTS-STARTPTS"]
 
+    if clip.clip.title is not None:
+        steps += _title_text(spec, clip.clip.title, clip.index, workdir, fitter,
+                             center_lines)
+
     if clip.clip.caption is not None:
-        steps.append(_drawtext(spec, clip.clip.caption, clip.index, workdir))
+        steps.append(_drawtext(spec, clip.clip.caption, clip.index, workdir,
+                               fitter, center_lines))
 
     # concat emits AVTB while fps emits 1/fps; xfade refuses to join links whose
     # timebases differ, so every clip is pinned to AVTB before stitching.
@@ -124,6 +165,11 @@ def _video_chain(spec: Spec, clip: ResolvedClip, workdir: str,
     label = f"v{clip.index}"
     chains.append(f"[{clip.input_index}:v]" + ",".join(steps) + f"[{label}]")
     return label
+
+
+def pad_color(background: str) -> str:
+    """The solid colour to letterbox against, for any background spec."""
+    return "black" if background.startswith(GRADIENT_PREFIX) else background
 
 
 def _fit(width: int, height: int, background: str) -> str:
@@ -160,14 +206,17 @@ def _zoompan(clip: ResolvedClip, spec: Spec, width: int, height: int) -> str:
             f"s={width}x{height}:fps={spec.fps}")
 
 
-def _drawtext(spec: Spec, caption: Caption, index: int, workdir: str) -> str:
+def _drawtext(spec: Spec, caption: Caption, index: int, workdir: str,
+              fitter: "TextFitter | None" = None,
+              center_lines: bool = False) -> str:
     # Captions go in a sidecar file so colons, quotes and commas in the text
     # never have to survive filtergraph escaping.
     text_path = os.path.join(workdir, f"caption_{index}.txt")
     with open(text_path, "w", encoding="utf-8") as handle:
         handle.write(caption.text)
 
-    border = max(8, caption.size // 3)
+    size = _fit_size(fitter, caption.text, caption.size, spec)
+    border = max(8, size // 3)
     if caption.position == "top":
         y = f"{caption.margin}"
     elif caption.position == "center":
@@ -177,7 +226,7 @@ def _drawtext(spec: Spec, caption: Caption, index: int, workdir: str) -> str:
 
     options = [
         f"textfile={escape_path(text_path)}",
-        f"fontsize={caption.size}",
+        f"fontsize={size}",
         f"fontcolor={caption.color}",
         "x=(w-text_w)/2",
         f"y={y}",
@@ -188,6 +237,8 @@ def _drawtext(spec: Spec, caption: Caption, index: int, workdir: str) -> str:
         options.insert(0, f"fontfile={escape_path(font)}")
     else:
         options.insert(0, "font=sans")
+    if center_lines:
+        options.append("text_align=C")
     if caption.box:
         options += ["box=1", f"boxcolor={caption.box_color}",
                     f"boxborderw={border}"]
@@ -212,6 +263,58 @@ def _stitch(spec: Spec, timeline: Timeline, labels: list[str],
             chains.append(f"[{merged}][{nxt}]concat=n=2:v=1:a=0,settb=AVTB[{out}]")
         merged = out
     return merged
+
+
+def _title_text(spec: Spec, title: Title, index: int, workdir: str,
+                fitter: "TextFitter | None" = None,
+                center_lines: bool = False) -> list[str]:
+    """Headline and optional subhead, centred as a pair on the middle line."""
+    font = find_font(spec.font)
+    font_option = (f"fontfile={escape_path(font)}" if font else "font=sans")
+
+    def layer(name: str, text: str, size: int, color: str, y: str) -> str:
+        path = os.path.join(workdir, f"title_{index}_{name}.txt")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+        options = [
+            font_option, f"textfile={escape_path(path)}", f"fontsize={size}",
+            f"fontcolor={color}", "x=(w-text_w)/2", f"y={y}", "line_spacing=12",
+        ]
+        if center_lines:
+            options.append("text_align=C")
+        return "drawtext=" + ":".join(options)
+
+    headline_size = _fit_size(fitter, title.headline, title.headline_size, spec)
+
+    if not title.subhead:
+        return [layer("headline", title.headline, headline_size,
+                      title.color, "(h-text_h)/2")]
+
+    # If the headline had to shrink, the subhead shrinks with it: fitting the
+    # two independently can leave the subhead larger than the headline.
+    scale = headline_size / title.headline_size
+    subhead_size = _fit_size(fitter, title.subhead,
+                             max(1, round(title.subhead_size * scale)), spec)
+    half = max(1, round(title.gap * scale)) // 2
+    return [
+        layer("headline", title.headline, headline_size, title.color,
+              f"h/2-text_h-{half}"),
+        layer("subhead", title.subhead, subhead_size, title.subhead_color,
+              f"h/2+{half}"),
+    ]
+
+
+def _overlay_logo(logo: Logo, input_index: int | None, video_label: str,
+                  chains: list[str]) -> str:
+    margin = logo.margin
+    x = f"main_w-overlay_w-{margin}" if logo.position.endswith("right") else str(margin)
+    y = f"main_h-overlay_h-{margin}" if logo.position.startswith("bottom") else str(margin)
+    chains.append(
+        f"[{input_index}:v]scale=-1:{logo.height},format=rgba,"
+        f"colorchannelmixer=aa={logo.opacity:.4f}[logo]"
+    )
+    chains.append(f"[{video_label}][logo]overlay={x}:{y}:format=auto[vout]")
+    return "vout"
 
 
 # --------------------------------------------------------------------------

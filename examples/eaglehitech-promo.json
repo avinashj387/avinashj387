@@ -1,0 +1,49 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "background": "#0B1F3A",
+  "seed": 7,
+
+  "duration": 3.5,
+  "motion": "random",
+  "zoom": 1.14,
+  "transition": { "type": "fade", "duration": 0.55 },
+
+  "title": { "headline_size": 104, "subhead_size": 46, "color": "white", "subhead_color": "#9FB6D0" },
+  "caption": { "position": "bottom", "size": 46, "box_color": "#0B1F3ACC", "margin": 96 },
+
+  "logo": { "path": "media/logo.png", "position": "top-right", "height": 84, "opacity": 0.92, "margin": 52 },
+  "music": { "path": "media/track.mp3", "volume": 0.28, "fade_in": 1.5, "fade_out": 3.0, "loop": true, "duck": true },
+
+  "clips": [
+    { "title": { "headline": "Eagle Hi-Tech", "subhead": "Industrial Corporate Pvt. Ltd" },
+      "background": "gradient:#0B1F3A,#143A63", "duration": 3.2 },
+
+    { "title": { "headline": "Trusted Industrial Talent\nSolutions Across India" },
+      "background": "gradient:#143A63,#0B1F3A", "duration": 3.2 },
+
+    { "path": "media/01.jpg", "caption": "10+ years across India's industrial sector", "motion": "zoom-in" },
+    { "path": "media/02.jpg", "caption": "Skilled, semi-skilled and unskilled professionals" },
+
+    { "title": { "headline": "2000+", "subhead": "professionals supplied" },
+      "background": "gradient:#0B1F3A,#143A63", "duration": 2.6 },
+
+    { "title": { "headline": "What we do", "subhead": "Talent supply  ·  Facility management  ·  Fabrication & assembly\nSecurity  ·  Housekeeping  ·  Talent advisory" },
+      "background": "#0B1F3A", "duration": 4.5 },
+
+    { "path": "media/03.jpg", "caption": "Facility management and industrial support", "motion": "pan-right" },
+    { "path": "media/04.jpg", "caption": "Fabrication and assembly, delivered to spec" },
+
+    { "title": { "headline": "500+ projects  ·  98% satisfaction", "subhead": "15,000+ talent professionals deployed annually" },
+      "background": "gradient:#143A63,#0B1F3A", "duration": 3.5 },
+
+    { "path": "media/05.jpg", "caption": "Trusted by 50+ companies across manufacturing", "motion": "zoom-out" },
+
+    { "title": { "headline": "PF  ·  ESIC  ·  ISO 9001:2018", "subhead": "Government registered and fully compliant" },
+      "background": "#0B1F3A", "duration": 3.2 },
+
+    { "title": { "headline": "Eagle Hi-Tech", "subhead": "Chhatrapati Sambhajinagar, Maharashtra\nhr@eaglehitec.com  ·  +91 88300 87156" },
+      "background": "gradient:#0B1F3A,#143A63", "duration": 4.0, "transition": "none" }
+  ]
+}

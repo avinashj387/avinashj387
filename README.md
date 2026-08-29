@@ -1,7 +1,8 @@
 # videogen
 
 Turn a folder of images (or a JSON spec) into a finished video: Ken Burns pans,
-crossfades, captions, voiceover and a music bed that ducks under the narration.
+crossfades, captions, generated title cards, a logo bug, voiceover and a music
+bed that ducks under the narration.
 
 Wraps `ffmpeg` — no MoviePy, no pip dependencies, no frame-by-frame Python. The
 whole video is built as a single filtergraph and encoded in one pass.
@@ -37,6 +38,9 @@ Without installing, `python -m videogen ...` works just as well.
 videogen from-dir ./photos -o reel.mp4 \
     --duration 3.5 --transition fade --audio track.mp3
 ```
+
+See `examples/eaglehitech-promo.json` for a full corporate promo — title cards,
+stat cards, a logo bug, captioned photos and a contact card.
 
 **A spec file**, when you want per-clip control:
 
@@ -77,6 +81,12 @@ clip can override.
     "start": 0                    // skip into the track
   },
 
+  "logo": {
+    "path": "media/logo.png",
+    "position": "top-right",     // any corner
+    "height": 90, "opacity": 0.9, "margin": 48
+  },
+
   "clips": [
     { "path": "media/01.jpg", "caption": "Sunrise", "motion": "zoom-in" },
     { "path": "media/02.jpg", "duration": 6, "zoom": 1.4 },
@@ -86,7 +96,11 @@ clip can override.
 
     // video clips keep their own audio; start/duration trim them
     { "path": "media/clip.mp4", "start": 12.5, "duration": 5, "volume": 0.6,
-      "transition": "none" }      // hard cut into the next clip
+      "transition": "none" },     // hard cut into the next clip
+
+    // a title card needs no photograph at all
+    { "title": { "headline": "10+ years", "subhead": "across India" },
+      "background": "gradient:#0B1F3A,#143A63", "duration": 3 }
   ]
 }
 ```
@@ -100,8 +114,22 @@ fine, and a caption as a bare string when you only want text.
 `font`, `seed`, `music`, `clips`, plus the clip defaults `duration`, `motion`,
 `zoom`, `transition`, `caption`.
 
-**Per clip** — `path`, `duration` (number or `"auto"`), `motion`, `zoom`,
-`caption`, `narration`, `start`, `transition`, `volume`.
+**Per clip** — `path` **or** `title` (one or the other, never both),
+`background`, `duration` (number or `"auto"`), `motion`, `zoom`, `caption`,
+`narration`, `start`, `transition`, `volume`.
+
+**`title`** — `headline`, `subhead`, `headline_size`, `subhead_size`, `color`,
+`subhead_color`, `gap`. A title card generates its own backdrop, so it needs no
+image. `\n` in either line breaks it across lines. Defaults to `motion: none`,
+since a Ken Burns move on a flat backdrop just wobbles.
+
+**`background`** — a solid colour (`black`, `#0B1F3A`, `0x0B1F3A`) or a linear
+gradient, `"gradient:#0B1F3A,#143A63"` (2-8 colours, drawn corner to corner).
+On a photo clip it is the letterbox colour; on a title card it is the backdrop.
+
+**`logo`** — `path`, `position` (`top-left`/`top-right`/`bottom-left`/
+`bottom-right`), `height`, `opacity`, `margin`. Held over the whole video,
+transparency preserved.
 
 **`motion`** (still images only) — `none`, `zoom-in`, `zoom-out`, `pan-left`,
 `pan-right`, `pan-up`, `pan-down`, `random`. `zoom` sets how far the move
@@ -173,9 +201,18 @@ One `ffmpeg` invocation, one filtergraph, one encode pass:
    `sidechaincompress` (measured at about 7 dB of ducking).
 5. **Encode** — H.264 `yuv420p` with `+faststart`.
 
-Caption text is written to a sidecar file and passed to `drawtext` via
-`textfile=`, so colons, commas, quotes and newlines in your captions never have
+Caption and title text is written to a sidecar file and passed to `drawtext`
+via `textfile=`, so colons, commas, quotes and newlines in your text never have
 to survive filtergraph escaping.
+
+**Text that fits.** `drawtext` has no notion of fitting, so an over-long
+headline simply runs off the frame. Glyph widths vary far too much for a
+character count to stand in for a measurement — in DejaVu Sans Bold `WWWWW` is
+3.5x the width of `iiiii` — so each string is drawn once, measured, and the
+largest size that fits is solved for (width scales linearly with font size, so
+one measurement is enough). A shrunk headline takes its subhead down with it,
+since fitting the two independently can leave the subhead the larger of the
+two. Multi-line text is governed by its widest line.
 
 ### Notes
 
@@ -186,7 +223,13 @@ to survive filtergraph escaping.
   source. That is ffmpeg's power-conserving mono→stereo upmix, not a bug —
   raise `volume` if it matters. Stereo sources pass through untouched.
 - `duration: "auto"` needs a `narration` or a video input to measure; on a bare
-  still it warns and falls back to 4s.
+  still or a title card it warns and falls back to 4s.
+- Each line of a multi-line title is centred only where the ffmpeg build's
+  `drawtext` has `text_align` (roughly 6.1+). Older builds still render, with
+  the lines left-aligned inside the centred block — the option is probed, never
+  assumed.
+- `gradients` cannot be stilled (`speed=0` is rejected), so a title backdrop is
+  captured as a single frame up front and reused as an ordinary still.
 
 ## Tests
 
