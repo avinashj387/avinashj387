@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "videogen"
+version = "0.1.0"
+description = "Assemble images, clips, captions and audio into a video with ffmpeg."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["pyyaml>=6"]
+
+[project.scripts]
+videogen = "videogen.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["videogen*"]

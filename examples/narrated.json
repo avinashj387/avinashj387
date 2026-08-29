@@ -1,0 +1,39 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "background": "0x101820",
+  "transition": { "type": "fade", "duration": 0.4 },
+  "caption": { "position": "bottom", "size": 44, "box_color": "black@0.65" },
+
+  "music": { "path": "media/bed.mp3", "volume": 0.3, "loop": true, "duck": true },
+
+  "clips": [
+    {
+      "path": "media/intro.jpg",
+      "duration": "auto",
+      "narration": "media/vo-01.mp3",
+      "caption": "Three things nobody tells you",
+      "motion": "zoom-in"
+    },
+    {
+      "path": "media/step-one.jpg",
+      "duration": "auto",
+      "narration": "media/vo-02.mp3",
+      "caption": "One: start smaller than feels useful"
+    },
+    {
+      "path": "media/demo.mp4",
+      "duration": 5,
+      "start": 12.5,
+      "volume": 0.6,
+      "transition": "none"
+    },
+    {
+      "path": "media/outro.jpg",
+      "duration": "auto",
+      "narration": "media/vo-03.mp3",
+      "motion": "pan-up"
+    }
+  ]
+}

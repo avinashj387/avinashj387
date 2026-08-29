@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# rendered output and source media
+*.mp4
+*.mov
+*.mkv
+media/
+out/

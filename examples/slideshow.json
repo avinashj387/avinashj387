@@ -1,0 +1,22 @@
+{
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "background": "black",
+  "seed": 42,
+
+  "duration": 4,
+  "motion": "random",
+  "zoom": 1.18,
+  "transition": { "type": "fade", "duration": 0.6 },
+  "caption": { "position": "bottom", "size": 52 },
+
+  "music": { "path": "media/track.mp3", "volume": 0.25, "fade_in": 1.5, "fade_out": 2.5 },
+
+  "clips": [
+    { "path": "media/01.jpg", "caption": "Sunrise over the harbour", "motion": "zoom-in" },
+    { "path": "media/02.jpg", "caption": "Low tide, 6:40am", "motion": "pan-right" },
+    { "path": "media/03.jpg", "duration": 6, "motion": "zoom-out" },
+    { "path": "media/04.jpg", "caption": { "text": "The long way home", "position": "center", "box": false, "size": 72 } }
+  ]
+}
