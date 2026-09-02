@@ -9,10 +9,24 @@ Packing benchmarks render blank because **`Manual Packing` and `ASRS Packing`
 are not being combined**, so the **join between the productivity table and the
 performance table fails — the `UniqueKey` values don't match**.
 
-This is a keying problem, not a job or execution problem. The performance rows
-may well exist in `HourlyPerformanceMetrics`, keyed per packing sub-type, while
-the productivity side carries one combined packing bucket. The join drops them
-and the dashboard shows nothing.
+**Located, in the SP's final `SELECT ... INTO #FinalResult`:**
+
+```sql
+GROUP BY hn.Hour, fd.TaskType     -- emits a row per hour PER SUB-TYPE
+```
+
+Grouping by `TaskType` writes a separate `Manual Packing` row and `ASRS
+Packing` row for the same hour. The productivity side carries one combined
+packing bucket, so the `UniqueKey` built from those rows can never match.
+
+The rows are therefore **not missing** — they are in
+`HourlyPerformanceMetrics`, sub-typed and unjoinable.
+
+One detail explains why the symptom looks like data that *stopped* rather than
+data that is mis-keyed. The same statement selects
+`ISNULL(fd.TaskType, 'Packing')`, so an hour with **no** packing data misses
+the `LEFT JOIN`, comes back `NULL`, and is relabelled `'Packing'` — which
+matches fine. Empty hours join; busy hours don't.
 
 Two consequences worth being explicit about:
 
@@ -38,26 +52,38 @@ the SP's own DELETE + INSERT). Confirm with Aniket if that is wrong.
 
 | Script | Purpose |
 |---|---|
-| `04_packing_uniquekey_mismatch.sql` | **Start here.** Proves the mismatch and shows which side splits the sub-types |
+| `05_packing_sp_fix.sql` | **The fix.** Corrected `#FinalResult` statement, plus four things to confirm before applying |
+| `04_packing_uniquekey_mismatch.sql` | Proves the mismatch and shows which side splits the sub-types |
 | `01_packing_source_vs_metrics.sql` | Confirms DCMImport has the packing hours, so the fix is downstream of the import |
 | `02_find_active_job_and_sp.sql` | Locates the owning SP and Agent job — needed for the SP's parameter signature (2b) before the re-run |
 | `03_packing_rerun_backfill.sql` | Reversible re-run, **after** the SP change |
 
-Run order: `04` → `01` → `02b` → *SP change* → `03` → `04` again to verify no
-unmatched keys remain.
+Run order: `04` → `02b` → `05` (apply) → `03` (delete + re-run from 25-Aug) →
+`04` again to verify no unmatched keys remain. `01` is only needed if `04`
+suggests the source itself is short.
 
-## The trap in the SP change
+## The change
 
-Combining the sub-types means summing `EstimatedTime` and `ActualTime` across
-`Manual Packing` and `ASRS Packing` **before** deriving
-`PerformancePercentage`. Averaging the two sub-type percentages produces a
-different — and wrong — number any time the two volumes differ. Script `04d`
-prints the per-hour split so the combined totals can be checked against the
-sub-type totals.
+Two lines, in `05`: drop `fd.TaskType` from the `GROUP BY`, and select the
+literal `'Packing'` instead of `ISNULL(fd.TaskType, 'Packing')`.
 
-Also confirm what the combined row's `TaskType` should be written as
-(`'Packing'` vs something else), since that value likely feeds `UniqueKey`
-construction and therefore the join itself.
+The percentage math needs no other change and **must not** be turned into an
+average — it already sums estimated and actual across the group before
+dividing, which is the correct way to combine sub-types. Averaging the Manual
+and ASRS percentages gives a wrong number whenever the two volumes differ.
+
+Four things to confirm before applying, all detailed in `05`:
+
+1. **Does `FinalData` carry all three sub-types?** The fix only combines what
+   is already there; an upstream filter would defeat it.
+2. **Integer division.** If `FinalEstimatedTime` / `FinalActualTime` are `int`,
+   `SUM(est) / SUM(act)` truncates and the percentage can only be 0 or 100.
+3. **`@Parm` vs `@StartDate1`.** `TimeSlot` is built from one, `StartDate`
+   written from the other. If they ever differ, the key is wrong regardless of
+   the `TaskType` fix.
+4. **`TimeSlot` string equality.** `FORMAT(..., 'HH:00')` wraps hour 24 to
+   `00:00`, giving `"23:00 - 00:00"`. If `Hourly_KPI` writes `"23:00 - 24:00"`,
+   the 23:00 bucket stays unmatched — a second, independent mismatch.
 
 ## Rules
 
