@@ -1,93 +1,79 @@
-# Packing hourly performance metrics — missing rows from 27-Aug
+# Packing hourly performance metrics — missing benchmarks
 
 Scope: **Packing only** (`Packing`, `Manual Packing`, `ASRS Packing`).
-The Manual Picking / ASRS Picking findings are recorded at the bottom as open
-items, not worked here.
+Owners: Sakshi Nayan and Avinash Jadhav, per the Win Dev catchup on 2-Sep-2026.
 
-## Symptom
+## Root cause (confirmed in the 2-Sep catchup)
 
-| Layer | 25–26 Aug | 27 Aug onward |
-|---|---|---|
-| `Hourly_KPI` | present | present |
-| `HourlyPerformanceMetrics` | present | missing hours |
+Packing benchmarks render blank because **`Manual Packing` and `ASRS Packing`
+are not being combined**, so the **join between the productivity table and the
+performance table fails — the `UniqueKey` values don't match**.
 
-`Hourly_KPI` is **not** to be modified. `HourlyPerformanceMetrics` is **not**
-to be hand-populated — `EstimatedTime`, `ActualTime` and
-`PerformancePercentage` must come out of
-`dbo.spPerformance_Packing_Hourly01`, which already handles all three packing
-task types and does its own `DELETE` + `INSERT` per run.
+This is a keying problem, not a job or execution problem. The performance rows
+may well exist in `HourlyPerformanceMetrics`, keyed per packing sub-type, while
+the productivity side carries one combined packing bucket. The join drops them
+and the dashboard shows nothing.
 
-## Run order
+Two consequences worth being explicit about:
 
-| Script | Answers |
+- **Re-running the SP as it stands fixes nothing.** It will regenerate the same
+  unmatchable keys. The SP change comes first, the re-run second.
+- **The rows are probably not missing.** Before deleting anything, confirm with
+  script `04` whether you are looking at absent rows or unjoinable ones — the
+  remediation is the same, but the verification afterwards is different.
+
+## Agreed remediation
+
+1. Modify `dbo.spPerformance_Packing_Hourly01` to combine the packing
+   sub-types so the emitted `UniqueKey` matches the productivity side.
+2. Delete packing records from **25-Aug** onward and re-run.
+3. Verify the join now resolves for every packing hour.
+
+Note the date discrepancy in the meeting record: the discussion says *"from the
+25th onward"*, the action item says *"from the 26th onwards"*. Scripts default
+to the 25th (wider window; re-running an already-correct day is a no-op given
+the SP's own DELETE + INSERT). Confirm with Aniket if that is wrong.
+
+## Scripts
+
+| Script | Purpose |
 |---|---|
-| `01_packing_source_vs_metrics.sql` | Is the gap in DCMImport or in the calculation? |
-| `02_find_active_job_and_sp.sql` | Which SP and which Agent job own Packing, is the job enabled, did it run? |
-| `03_packing_rerun_backfill.sql` | Reversible re-run of the SP for the affected dates |
+| `04_packing_uniquekey_mismatch.sql` | **Start here.** Proves the mismatch and shows which side splits the sub-types |
+| `01_packing_source_vs_metrics.sql` | Confirms DCMImport has the packing hours, so the fix is downstream of the import |
+| `02_find_active_job_and_sp.sql` | Locates the owning SP and Agent job — needed for the SP's parameter signature (2b) before the re-run |
+| `03_packing_rerun_backfill.sql` | Reversible re-run, **after** the SP change |
 
-Script 01 query **1b** is the one that decides everything — it full-joins the
-source hours against the metric hours and labels each bucket.
+Run order: `04` → `01` → `02b` → *SP change* → `03` → `04` again to verify no
+unmatched keys remain.
 
-## Decision tree
+## The trap in the SP change
 
-```
-01b Diagnosis column
-│
-├─ HasSource = 0 for the missing hours
-│     -> nothing to calculate; the break is upstream of the SP.
-│        Investigate the DCMImport feed for 27-Aug, not the performance SP.
-│
-└─ HasSource > 0, MetricRows = 0   ("MISSING METRIC")
-      -> source is fine, run 02.
-      │
-      ├─ 2c: JobEnabled = 0
-      │     -> job was disabled. Re-enable, then backfill with 03.
-      │
-      ├─ 2e: no history rows on/after 27-Aug
-      │     -> job stopped firing. Check 2g first: if msdb history was
-      │        purged, this proves nothing. Check 2d date_modified for a
-      │        schedule change. Then backfill with 03.
-      │
-      ├─ 2e: run_status = 0 (failed), read h.message
-      │     -> real error. Fix the cause first; a backfill will just fail
-      │        the same way.
-      │
-      └─ 2e: run_status = 1 (succeeded) every day, rows still missing
-            -> the job ran and the SP produced an empty #FinalResult.
-               This is an SP-logic problem, not a scheduling one. Prime
-               suspects, in order:
-                 1. 2a o.modify_date — was a Packing SP ALTERed around
-                    27-Aug? That change is the cause until proven otherwise.
-                 2. The SP's date parameter / default window — if it only
-                    processes "yesterday" and the job start time moved, a
-                    day falls between two runs.
-                 3. A join in the SP that drops rows: a standards/UPH
-                    lookup, a shift or roster table, or an employee mapping
-                    with no row for the new period. An inner join to a
-                    standards table with no 27-Aug-onward entry produces
-                    exactly this symptom — source present, output empty,
-                    job green.
-                 4. A new value appearing in a filtered column from 27-Aug
-                    (a fourth packing TaskType, a new zone/site code).
-```
+Combining the sub-types means summing `EstimatedTime` and `ActualTime` across
+`Manual Packing` and `ASRS Packing` **before** deriving
+`PerformancePercentage`. Averaging the two sub-type percentages produces a
+different — and wrong — number any time the two volumes differ. Script `04d`
+prints the per-hour split so the combined totals can be checked against the
+sub-type totals.
 
-To test suspect 3 or 4 without changing anything, run the SP's own source
-`SELECT` (the part that populates its working temp table) for 26-Aug and for
-28-Aug and compare row counts — the join that drops to zero is the culprit.
+Also confirm what the combined row's `TaskType` should be written as
+(`'Packing'` vs something else), since that value likely feeds `UniqueKey`
+construction and therefore the join itself.
 
-## Rules for this fix
+## Rules
 
-- Do not `UPDATE`/`INSERT` `HourlyPerformanceMetrics` by hand.
+- Do not `UPDATE`/`INSERT` `HourlyPerformanceMetrics` by hand — every value
+  comes from the SP.
 - Do not change `Hourly_KPI.TaskType`.
-- Take the snapshot in 03a before any re-run; 03e is the rollback.
-- Confirm the SP's parameter signature (02b) before editing the `EXEC` in 03c.
+- Take the snapshot in `03a` before the delete/re-run; `03e` is the rollback.
+- Confirm the SP's parameter signature (`02b`) before editing the `EXEC` in
+  `03c`.
 
-## Open items (not Packing, deliberately not addressed here)
+## Open items — not Packing, deliberately not addressed here
 
-- **Manual Picking** — KPI rows exist, metric rows missing. Needs a
-  `Manual Picking` vs `Manual Picking - Direct` naming check before anything
-  else; may be a mapping issue rather than a calculation one.
+- **Manual Picking** — KPI rows exist, metric rows missing. Check
+  `Manual Picking` vs `Manual Picking - Direct` naming first; this may be the
+  same class of keying bug as Packing.
 - **ASRS Picking** — `spPerformance_Picking_Hourly_Detailed_Calculation`
   filters `di.TaskType = 'Manual Picking'` only, so ASRS Picking is never
-  calculated. Search for another SP; if none exists, the picking calculation
-  has to be extended, which is a change to business logic and needs sign-off.
+  calculated at all. Either another SP owns it, or the picking calculation
+  needs extending — a business-logic change needing sign-off.

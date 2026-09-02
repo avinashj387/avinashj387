@@ -1,9 +1,16 @@
 /*==============================================================================
   03 - Controlled re-run of the Packing hourly calculation
 
-  Use ONLY after 01 and 02 have shown:
-      - source data exists in DCMImport for the missing hours, and
-      - the SP itself is intact (it is the job/execution that was missed).
+  Use AFTER the SP has been changed to combine the packing sub-types
+  (see README - the root cause is a UniqueKey mismatch, not a missed run).
+  Re-running the current, unfixed SP will just regenerate the same
+  unmatchable keys.
+
+  Date range: the 2-Sep catchup recorded both "from the 25th onward" (in the
+  discussion) and "from the 26th onwards" (in the action item). The 25th is
+  used below because that is the wider window and the SP's DELETE + INSERT
+  makes re-running an already-correct day a no-op. Confirm with Aniket before
+  running if that is not the intent.
 
   This script never writes performance values by hand. It takes a reversible
   snapshot, then lets dbo.spPerformance_Packing_Hourly01 regenerate the rows
@@ -20,7 +27,7 @@ GO
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
 
-DECLARE @FromDate date = '2026-08-27',
+DECLARE @FromDate date = '2026-08-25',
         @ToDate   date = '2026-09-02',   -- inclusive, last date to recalculate
         @Date     date,
         @Before   int,
