@@ -1,0 +1,171 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "background": "#05183C",
+  "seed": 11,
+  "music": {
+    "path": "media/music.wav",
+    "volume": 0.3,
+    "fade_in": 1.2,
+    "fade_out": 3.0,
+    "loop": true,
+    "duck": true
+  },
+  "clips": [
+    {
+      "path": "media/frames/01-hook.png",
+      "duration": 4.4,
+      "motion": "zoom-in",
+      "zoom": 1.07,
+      "transition": {
+        "type": "fade",
+        "duration": 0.5
+      },
+      "narration": "media/vo/01-hook.wav"
+    },
+    {
+      "path": "media/frames/02-drive.png",
+      "duration": 4.6,
+      "motion": "zoom-out",
+      "zoom": 1.08,
+      "transition": {
+        "type": "smoothleft",
+        "duration": 0.5
+      },
+      "narration": "media/vo/02-drive.wav"
+    },
+    {
+      "path": "media/frames/03-company.png",
+      "duration": 5.0,
+      "motion": "pan-up",
+      "zoom": 1.07,
+      "transition": {
+        "type": "fade",
+        "duration": 0.45
+      },
+      "narration": "media/vo/03-company.wav"
+    },
+    {
+      "path": "media/frames/04-college.png",
+      "duration": 5.4,
+      "motion": "zoom-in",
+      "zoom": 1.06,
+      "transition": {
+        "type": "fadewhite",
+        "duration": 0.5
+      },
+      "narration": "media/vo/04-college.wav"
+    },
+    {
+      "path": "media/frames/05-date.png",
+      "duration": 5.6,
+      "motion": "zoom-out",
+      "zoom": 1.08,
+      "transition": {
+        "type": "slideup",
+        "duration": 0.5
+      },
+      "narration": "media/vo/05-date.wav"
+    },
+    {
+      "path": "media/frames/06-venue.png",
+      "duration": 4.6,
+      "motion": "pan-right",
+      "zoom": 1.07,
+      "transition": {
+        "type": "fade",
+        "duration": 0.45
+      },
+      "narration": "media/vo/06-venue.wav"
+    },
+    {
+      "path": "media/frames/07-eligible.png",
+      "duration": 4.8,
+      "motion": "zoom-in",
+      "zoom": 1.07,
+      "transition": {
+        "type": "circleopen",
+        "duration": 0.55
+      },
+      "narration": "media/vo/07-eligible.wav"
+    },
+    {
+      "path": "media/frames/08-pillars.png",
+      "duration": 6.0,
+      "motion": "pan-up",
+      "zoom": 1.06,
+      "transition": {
+        "type": "wipeup",
+        "duration": 0.5
+      },
+      "narration": "media/vo/08-pillars.wav"
+    },
+    {
+      "path": "media/frames/09-reasons_a.png",
+      "duration": 6.2,
+      "motion": "zoom-in",
+      "zoom": 1.06,
+      "transition": {
+        "type": "slideleft",
+        "duration": 0.45
+      },
+      "narration": "media/vo/09-reasons_a.wav"
+    },
+    {
+      "path": "media/frames/10-reasons_b.png",
+      "duration": 5.0,
+      "motion": "zoom-out",
+      "zoom": 1.07,
+      "transition": {
+        "type": "fade",
+        "duration": 0.5
+      },
+      "narration": "media/vo/10-reasons_b.wav"
+    },
+    {
+      "path": "media/frames/11-services.png",
+      "duration": 7.0,
+      "motion": "pan-up",
+      "zoom": 1.06,
+      "transition": {
+        "type": "radial",
+        "duration": 0.55
+      },
+      "narration": "media/vo/11-services.wav"
+    },
+    {
+      "path": "media/frames/12-scale.png",
+      "duration": 4.6,
+      "motion": "zoom-in",
+      "zoom": 1.09,
+      "transition": {
+        "type": "fade",
+        "duration": 0.5
+      },
+      "narration": "media/vo/12-scale.wav"
+    },
+    {
+      "path": "media/frames/13-contact.png",
+      "duration": 6.4,
+      "motion": "pan-up",
+      "zoom": 1.06,
+      "transition": {
+        "type": "smoothright",
+        "duration": 0.55
+      },
+      "narration": "media/vo/13-contact.wav"
+    },
+    {
+      "path": "media/frames/14-cta.png",
+      "duration": 6.4,
+      "motion": "zoom-out",
+      "zoom": 1.08,
+      "transition": {
+        "type": "none",
+        "duration": 0.0
+      },
+      "narration": "media/vo/14-cta.wav"
+    }
+  ]
+}
