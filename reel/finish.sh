@@ -4,11 +4,18 @@ set -euo pipefail
 FF="${FF:?}"; B="$(cd "$(dirname "$0")" && pwd)"; OUT="${OUT:-$B/out}"
 mkdir -p "$OUT"
 
-# 1. full 75 s reel, loudness-normalised for social platforms (-14 LUFS)
+# 1. Full 75 s reel. Two-pass at a fixed bitrate rather than CRF: 75 s of
+#    1080x1920 at CRF 18 lands around 33 MiB, over the 30 MiB ceiling several
+#    chat and messaging transports enforce. 2600k puts it near 25 MiB with no
+#    visible loss on flat motion graphics.
+"$FF" -y -loglevel error -i "$B/video_silent.mp4" -c:v libx264 -preset medium \
+  -b:v 2600k -pass 1 -an -pix_fmt yuv420p -f mp4 /dev/null
 "$FF" -y -loglevel error -i "$B/video_silent.mp4" -i "$B/music.wav" \
   -filter:a "loudnorm=I=-14:TP=-1.0:LRA=11" \
-  -c:v copy -c:a aac -b:a 320k -ar 44100 -ac 2 -shortest \
+  -c:v libx264 -preset medium -b:v 2600k -pass 2 -pix_fmt yuv420p \
+  -c:a aac -b:a 192k -ar 44100 -ac 2 -shortest \
   -movflags +faststart "$OUT/campus-drive-reel-75s.mp4"
+rm -f ffmpeg2pass*.log*
 
 # 2. 30 s WhatsApp cut: hook -> college -> date -> salary -> package -> CTA.
 #    Picture is cut from the reel; the bed is laid down continuously underneath

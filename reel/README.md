@@ -44,18 +44,27 @@ continuously so the music does not jump), and grabs the cover still.
 
 ```bash
 export FF=/path/to/ffmpeg
-node render.js                 # writes video_silent.mp4  (~15 min)
-python3 music.py               # writes music.wav         (~4 s)
+OUT=$PWD/build node render.js  # writes video_silent.mp4
+python3 music.py               # writes music.wav
 FF=$FF ./finish.sh             # writes out/
 ```
 
+The picture render is the slow step — it screenshots the page 2250 times, and
+the page composites large blurs and blend modes on every frame. On four cores
+it took **36 minutes** (~1 fps). The music takes about four seconds.
+
 Output in `out/`:
 
-| File | What it is |
-| --- | --- |
-| `campus-drive-reel-75s.mp4` | full reel — Instagram Reels, YouTube Shorts, Facebook |
-| `campus-drive-whatsapp-30s.mp4` | short cut for WhatsApp Status |
-| `thumbnail-1080x1920.png` | cover still |
+| File | What it is | Result |
+| --- | --- | --- |
+| `campus-drive-reel-75s.mp4` | full reel — Instagram Reels, YouTube Shorts, Facebook | 75.0 s, 2599 kb/s video + 192k AAC, 25.1 MiB, −13.0 LUFS |
+| `campus-drive-whatsapp-30s.mp4` | short cut for WhatsApp Status | 30.2 s, 12.3 MiB, −12.7 LUFS |
+| `thumbnail-1080x1920.png` | cover still | 1.2 MiB |
+
+Loudness lands a little above the −14 LUFS target because `loudnorm` is running
+single-pass and works from an estimate. Both platforms normalise on upload, so
+the difference is inaudible; run `loudnorm` twice (measure, then apply the
+measured values) if you need the number exact.
 
 ## Editing the video
 
