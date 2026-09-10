@@ -1,0 +1,517 @@
+<!doctype html><html><head><meta charset="utf-8"><title>reel</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:#06122C}
+body{font-family:'Mukta','Noto Color Emoji',sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+:root{
+  --blue:#0B3C8A; --blue2:#1565D8; --navy:#06122C; --navy2:#08183A;
+  --yel:#FFC61A; --white:#FFFFFF; --dim:#A9C0E8;
+}
+.en{font-family:'Poppins','Mukta','Noto Color Emoji',sans-serif}
+.y{color:var(--yel)}
+#stage{position:absolute;inset:0;overflow:hidden}
+
+/* ---------- persistent background ---------- */
+#bg{position:absolute;inset:0;background:linear-gradient(165deg,#08183A 0%,#0B3C8A 52%,#061530 100%)}
+#grid{position:absolute;inset:-200px;opacity:.16;
+  background-image:linear-gradient(#7FB2FF 1.5px,transparent 1.5px),linear-gradient(90deg,#7FB2FF 1.5px,transparent 1.5px);
+  background-size:120px 120px}
+#grid2{position:absolute;inset:-200px;opacity:.10;
+  background-image:linear-gradient(#7FB2FF 1px,transparent 1px),linear-gradient(90deg,#7FB2FF 1px,transparent 1px);
+  background-size:24px 24px}
+.blob{position:absolute;border-radius:50%;filter:blur(120px);opacity:.55}
+#b1{width:900px;height:900px;background:#1565D8;left:-260px;top:-180px}
+#b2{width:820px;height:820px;background:#0A2A6B;right:-280px;bottom:-160px}
+#b3{width:520px;height:520px;background:#FFC61A;opacity:.10;left:50%;top:38%;margin-left:-260px}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 45%,transparent 30%,rgba(3,9,24,.82) 100%)}
+#tint{position:absolute;inset:0;opacity:0;mix-blend-mode:screen;
+  background:radial-gradient(ellipse at 50% 38%,rgba(255,176,92,.62),rgba(255,140,60,.10) 58%,transparent 74%)}
+#sweep{position:absolute;top:-40%;left:-60%;width:60%;height:180%;transform:rotate(18deg);opacity:0;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.30),transparent);filter:blur(30px)}
+
+/* ---------- persistent HUD ---------- */
+#pbwrap{position:absolute;top:0;left:0;width:1080px;height:9px;background:rgba(255,255,255,.14);z-index:60}
+#pbar{height:100%;width:0;background:linear-gradient(90deg,#FFC61A,#FFE58A)}
+#bug{position:absolute;top:52px;right:56px;z-index:60;display:flex;align-items:center;gap:14px;
+  padding:14px 24px;border:2px solid rgba(255,255,255,.30);border-radius:999px;background:rgba(6,18,44,.42);opacity:.9}
+#bug .mk{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#FFC61A,#FF9F1A)}
+#bug .tx{font-family:'Poppins';font-weight:700;font-size:25px;letter-spacing:.10em}
+
+/* ---------- scene frame ---------- */
+.scene{position:absolute;inset:0;display:none}
+.scene.on{display:block}
+.stack{position:absolute;left:88px;right:88px;top:250px;bottom:360px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center}
+.stackL{align-items:flex-start;text-align:left}
+
+/* ---------- type ---------- */
+.h1{font-size:104px;font-weight:800;line-height:1.14;letter-spacing:-.01em;text-shadow:0 10px 40px rgba(0,0,0,.45)}
+.h2{font-size:82px;font-weight:800;line-height:1.16}
+.kick{font-family:'Poppins';font-weight:700;font-size:34px;letter-spacing:.24em;color:#8FB6F5;text-transform:uppercase}
+.sub{font-size:48px;font-weight:500;color:#CFE0FF;line-height:1.35}
+.kickm{font-family:'Mukta','Noto Color Emoji',sans-serif;font-weight:700;font-size:40px;letter-spacing:0;
+  text-transform:none;color:#9CC0FF}
+.rule{height:12px;width:0;border-radius:99px;background:linear-gradient(90deg,#FFC61A,#FF9F1A);margin:34px 0}
+.badge{font-size:130px;line-height:1}
+
+.card{background:rgba(255,255,255,.09);border:2px solid rgba(255,255,255,.20);border-radius:30px;
+  padding:30px 40px;backdrop-filter:blur(6px)}
+.chip{display:inline-block;background:rgba(255,255,255,.11);border:2px solid rgba(255,255,255,.24);
+  border-radius:999px;padding:20px 38px;font-size:46px;font-weight:700;margin:11px 9px;white-space:nowrap}
+.chip.gold{background:rgba(255,198,26,.16);border-color:rgba(255,198,26,.62);color:#FFD75E}
+.ltbar{background:linear-gradient(90deg,rgba(11,60,138,.94),rgba(11,60,138,.55));border-left:12px solid var(--yel);
+  border-radius:0 22px 22px 0;padding:26px 42px;margin:14px 0;box-shadow:0 18px 50px rgba(0,0,0,.40)}
+.big{font-family:'Poppins';font-weight:700;font-size:190px;line-height:1;letter-spacing:-.03em;color:var(--yel);
+  text-shadow:0 0 70px rgba(255,198,26,.55),0 12px 40px rgba(0,0,0,.5)}
+.pill{display:inline-block;background:#fff;color:#0B2358;border-radius:999px;padding:18px 40px;
+  font-size:52px;font-weight:800;font-family:'Poppins'}
+
+/* ---------- scene art ---------- */
+.art{position:absolute;inset:0;pointer-events:none}
+.ring{position:absolute;border:3px solid rgba(255,198,26,.30);border-radius:50%;left:50%;top:46%}
+.gear{position:absolute;opacity:.16}
+.dot{position:absolute;width:14px;height:14px;border-radius:50%;background:rgba(255,198,26,.85)}
+
+/* stepper */
+.step{display:flex;align-items:center;gap:32px;margin:18px 0;width:100%}
+.step .num{flex:0 0 96px;width:96px;height:96px;border-radius:50%;border:4px solid rgba(255,255,255,.35);
+  display:grid;place-items:center;font-family:'Poppins';font-weight:700;font-size:46px;background:rgba(255,255,255,.06)}
+.step.done .num{background:var(--yel);border-color:var(--yel);color:#0B2358}
+.step .tx{font-size:50px;font-weight:700;line-height:1.2}
+.spine{position:absolute;left:46px;top:0;width:6px;background:rgba(255,255,255,.40);border-radius:99px}
+
+/* checklist */
+.ck{display:flex;align-items:center;gap:26px;margin:16px 0;font-size:46px;font-weight:600}
+.ck .bx{flex:0 0 60px;width:60px;height:60px;border-radius:16px;border:4px solid rgba(255,255,255,.35);
+  display:grid;place-items:center;font-size:38px;color:#0B2358;background:transparent}
+.ck.on .bx{background:#3DDC84;border-color:#3DDC84}
+
+/* end screen */
+#endscr{position:absolute;inset:0;background:linear-gradient(165deg,#0B3C8A,#061530);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:0;opacity:0;z-index:50;padding:0 70px;text-align:center}
+</style></head><body>
+<div id="stage">
+  <div id="bg"></div><div id="grid"></div><div id="grid2"></div>
+  <div class="blob" id="b1"></div><div class="blob" id="b2"></div><div class="blob" id="b3"></div>
+  <div id="vig"></div><div id="tint"></div><div id="sweep"></div>
+
+  <!-- ============ S1 HOOK ============ -->
+  <section class="scene" id="s1">
+    <div class="art">
+      <div class="ring" id="r1" style="width:760px;height:760px;margin:-380px 0 0 -380px"></div>
+      <div class="ring" id="r2" style="width:1080px;height:1080px;margin:-540px 0 0 -540px"></div>
+      <div class="ring" id="r3" style="width:1420px;height:1420px;margin:-710px 0 0 -710px"></div>
+    </div>
+    <div class="stack">
+      <div class="badge" id="s1b">🚨</div>
+      <div class="kick" id="s1k" style="margin:26px 0 18px">Campus Hiring 2026</div>
+      <h1 class="h1" id="s1h">मोठी <span class="y">Campus Hiring</span><br>संधी!</h1>
+      <div class="rule" id="s1r"></div>
+      <p class="sub" id="s1s">Engineering विद्यार्थ्यांसाठी<br>सुवर्णसंधी</p>
+    </div>
+  </section>
+
+  <!-- ============ S2 CAMPUS DRIVE ============ -->
+  <section class="scene" id="s2">
+    <svg class="art" id="s2art" viewBox="0 0 1080 1920">
+      <g stroke="#8FB6F5" fill="none" stroke-width="4" opacity=".34">
+        <path id="p2a" d="M150 1180 h780 v-360 h-780 z"/>
+        <path id="p2b" d="M150 820 l390 -230 l390 230"/>
+        <path id="p2c" d="M250 1180 v-250 h120 v250 M470 1180 v-250 h140 v250 M710 1180 v-250 h120 v250"/>
+        <path id="p2d" d="M150 1180 h780" stroke="#FFC61A" stroke-width="7" opacity=".8"/>
+        <circle id="p2e" cx="540" cy="700" r="42"/>
+      </g>
+    </svg>
+    <div class="stack stackL" style="justify-content:flex-end;bottom:420px;left:0;right:70px">
+      <div class="ltbar" id="s2a" style="align-self:flex-start"><span class="en y" style="font-size:56px;font-weight:700;letter-spacing:.05em">CAMPUS DRIVE</span></div>
+      <div class="ltbar" id="s2b" style="align-self:flex-start"><span style="font-size:56px;font-weight:800">मातोश्री इंजिनिअरिंग कॉलेज, एकलहेरा</span></div>
+      <div class="ltbar" id="s2c" style="align-self:flex-start"><span class="en y" style="font-size:44px;font-weight:700;line-height:1.25">Eagle Hi-tech Industrial<br>Corporate Pvt. Ltd.</span></div>
+    </div>
+  </section>
+
+  <!-- ============ S3 DATE ============ -->
+  <section class="scene" id="s3">
+    <div class="stack">
+      <div class="kick" id="s3k">Save the date</div>
+      <div style="display:flex;gap:34px;margin:44px 0 10px">
+        <div class="card" id="s3d1" style="padding:26px 0;width:280px;text-align:center;background:rgba(255,255,255,.10)">
+          <div class="en" style="font-size:150px;font-weight:700;line-height:1;color:#FFC61A">8</div>
+          <div style="font-size:40px;font-weight:600;color:#CFE0FF;margin-top:6px">सप्टेंबर</div>
+        </div>
+        <div class="en" id="s3amp" style="font-size:110px;font-weight:700;align-self:center;color:#8FB6F5">&amp;</div>
+        <div class="card" id="s3d2" style="padding:26px 0;width:280px;text-align:center;background:rgba(255,255,255,.10)">
+          <div class="en" style="font-size:150px;font-weight:700;line-height:1;color:#FFC61A">9</div>
+          <div style="font-size:40px;font-weight:600;color:#CFE0FF;margin-top:6px">सप्टेंबर</div>
+        </div>
+      </div>
+      <div class="en" id="s3yr" style="font-size:96px;font-weight:700;letter-spacing:.12em;margin-top:18px">2026</div>
+      <div class="rule" id="s3r"></div>
+      <div class="chip gold" id="s3c" style="font-size:50px">📅 2 दिवसांचा Campus Drive</div>
+    </div>
+  </section>
+
+  <!-- ============ S4 SELECTION ============ -->
+  <section class="scene" id="s4">
+    <div class="stack stackL">
+      <div class="kickm" id="s4k" style="margin-bottom:26px">निवड प्रक्रिया</div>
+      <div style="position:relative;width:100%">
+        <div class="spine" id="s4sp"></div>
+        <div class="step" id="s4s1"><div class="num en">1</div><div class="tx">कंपनीची माहिती</div></div>
+        <div class="step" id="s4s2"><div class="num en">2</div><div class="tx">Written Test<br><span class="y" style="font-size:40px">75% किंवा अधिक गुण आवश्यक</span></div></div>
+        <div class="step" id="s4s3"><div class="num en">3</div><div class="tx">Interview</div></div>
+        <div class="step" id="s4s4"><div class="num en">4</div><div class="tx y">Joining Offer</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ S5 DEPARTMENTS ============ -->
+  <section class="scene" id="s5">
+    <svg class="art" id="s5art" viewBox="0 0 1080 1920">
+      <g fill="none" stroke="#8FB6F5" stroke-width="5" opacity=".30">
+        <g id="g1" transform-origin="240px 560px"><circle cx="240" cy="560" r="150"/><circle cx="240" cy="560" r="66"/>
+          <path d="M240 380 v70 M240 670 v70 M60 560 h70 M350 560 h70 M113 433 l50 50 M317 657 l50 50 M367 433 l-50 50 M163 657 l-50 50" stroke-width="26" stroke-linecap="round"/></g>
+        <g id="g2" transform-origin="850px 1400px"><circle cx="850" cy="1400" r="108"/><circle cx="850" cy="1400" r="46"/>
+          <path d="M850 1265 v54 M850 1481 v54 M715 1400 h54 M931 1400 h54" stroke-width="22" stroke-linecap="round"/></g>
+      </g>
+    </svg>
+    <div class="stack">
+      <div class="kick" id="s5k">Career Opportunities</div>
+      <h2 class="h2 y" id="s5h" style="margin:18px 0 40px">विविध विभागांमध्ये<br>संधी</h2>
+      <div style="max-width:940px">
+        <span class="chip" id="s5c1">Production</span><span class="chip" id="s5c2">Quality</span>
+        <span class="chip" id="s5c3">Supervision</span><span class="chip gold" id="s5c4">Team Leader</span>
+        <span class="chip gold" id="s5c5">Service Engineer</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ S6 SALARY ============ -->
+  <section class="scene" id="s6">
+    <div class="art"><div class="ring" id="s6r" style="width:1000px;height:1000px;margin:-500px 0 0 -500px;border-color:rgba(255,198,26,.22)"></div></div>
+    <div class="stack">
+      <div class="kickm" id="s6k">💰 मासिक Basic Salary</div>
+      <div class="big en" id="s6num" style="margin:26px 0 6px">₹0</div>
+      <div class="pill" id="s6p" style="margin-top:22px">+ ₹1,900 ESIC &amp; PF</div>
+      <div style="margin-top:52px;width:100%">
+        <div class="ck" id="s6k1" style="justify-content:center"><div class="bx">✓</div><div>Additional Payment (4 दिवस)</div></div>
+        <div class="ck" id="s6k2" style="justify-content:center"><div class="bx">✓</div><div>Overtime Payment</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ S7 SHIFT ============ -->
+  <section class="scene" id="s7">
+    <svg class="art" id="s7art" viewBox="0 0 1080 1920">
+      <g opacity=".28"><circle cx="540" cy="700" r="230" fill="none" stroke="#8FB6F5" stroke-width="6"/>
+      <circle cx="540" cy="700" r="14" fill="#FFC61A"/>
+      <line id="hh" x1="540" y1="700" x2="540" y2="570" stroke="#fff" stroke-width="14" stroke-linecap="round" transform-origin="540px 700px"/>
+      <line id="mh" x1="540" y1="700" x2="540" y2="510" stroke="#FFC61A" stroke-width="9" stroke-linecap="round" transform-origin="540px 700px"/></g>
+    </svg>
+    <div class="stack" style="justify-content:flex-end">
+      <div class="card" id="s7a" style="width:100%;margin-bottom:26px;display:flex;align-items:center;gap:30px">
+        <div style="font-size:74px">⏰</div><div style="font-size:56px;font-weight:700;text-align:left">
+        <span class="en y" style="font-size:72px">8</span> किंवा <span class="en y" style="font-size:72px">12</span> तासांची Shift</div></div>
+      <div class="card" id="s7b" style="width:100%;display:flex;align-items:center;gap:30px">
+        <div style="font-size:74px">💰</div><div style="font-size:52px;font-weight:700;text-align:left">Overtime चे अतिरिक्त<br>payment salary मध्ये</div></div>
+    </div>
+  </section>
+
+  <!-- ============ S8 UNIFORM + BUS ============ -->
+  <section class="scene" id="s8">
+    <svg class="art" id="s8art" viewBox="0 0 1080 1920">
+      <g id="bus" opacity=".9">
+        <rect x="120" y="560" width="840" height="300" rx="46" fill="#EAF2FF"/>
+        <rect x="120" y="560" width="840" height="96" rx="46" fill="#1565D8"/>
+        <rect x="168" y="676" width="150" height="112" rx="18" fill="#0B3C8A" opacity=".78"/>
+        <rect x="348" y="676" width="150" height="112" rx="18" fill="#0B3C8A" opacity=".78"/>
+        <rect x="528" y="676" width="150" height="112" rx="18" fill="#0B3C8A" opacity=".78"/>
+        <rect x="716" y="676" width="200" height="112" rx="18" fill="#0B3C8A" opacity=".78"/>
+        <rect x="120" y="826" width="840" height="22" fill="#FFC61A"/>
+        <circle cx="286" cy="878" r="62" fill="#0B1A33"/><circle cx="286" cy="878" r="26" fill="#8FB6F5"/>
+        <circle cx="790" cy="878" r="62" fill="#0B1A33"/><circle cx="790" cy="878" r="26" fill="#8FB6F5"/>
+      </g>
+    </svg>
+    <div class="stack" style="justify-content:flex-end">
+      <div class="ltbar" id="s8a" style="width:100%"><span style="font-size:50px;font-weight:700">👕 Black Jeans + Blue T-shirt</span></div>
+      <div class="ltbar" id="s8b" style="width:100%"><span style="font-size:50px;font-weight:700">🥾 Safety Shoes</span></div>
+      <div class="ltbar" id="s8c" style="width:100%"><span class="y" style="font-size:50px;font-weight:700">🚌 Company Bus सुविधा</span></div>
+    </div>
+  </section>
+
+  <!-- ============ S9 HOSTEL ============ -->
+  <section class="scene" id="s9">
+    <svg class="art" id="s9art" viewBox="0 0 1080 1920">
+      <g fill="none" stroke="#FFD98A" stroke-width="5" opacity=".28">
+        <path id="p9" d="M300 760 v-230 l240 -170 l240 170 v230 z"/>
+        <path d="M300 760 h480" stroke="#FFC61A" stroke-width="7"/>
+        <rect x="380" y="600" width="110" height="90" rx="10"/><rect x="590" y="600" width="110" height="90" rx="10"/>
+      </g>
+    </svg>
+    <div class="stack">
+      <div class="badge" id="s9b" style="font-size:104px">🏠</div>
+      <h2 class="h2 y en" id="s9h" style="font-size:66px;margin:22px 0 12px">Anuradha<br>Women's Hostel</h2>
+      <p class="sub" id="s9s" style="margin-bottom:34px">महिला उमेदवारांसाठी सुविधा</p>
+      <div style="max-width:930px">
+        <span class="chip" id="s9c1">गरम पाणी</span><span class="chip" id="s9c2">Filtered Water</span>
+        <span class="chip" id="s9c3">CCTV</span><span class="chip" id="s9c4">स्वतंत्र बेड</span>
+        <span class="chip" id="s9c5">Cupboard</span><span class="chip" id="s9c6">Mess</span><span class="chip" id="s9c7">Warden</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ S10 INTERNSHIP ============ -->
+  <section class="scene" id="s10">
+    <div class="stack">
+      <div class="kick" id="s10k">🎓 Engineering Internship</div>
+      <div class="card" id="s10a" style="margin:30px 0 0;width:100%;text-align:center">
+        <div style="font-size:60px;font-weight:800"><span class="en y" style="font-size:78px">6</span> महिन्यांची Internship</div>
+        <div class="sub" id="s10b" style="font-size:42px;margin-top:14px">📜 पूर्ण केल्यावर Certificate</div>
+      </div>
+      <div class="pill" id="s10c" style="margin:38px 0 30px">💼 1 Year Experience ग्राह्य</div>
+      <div class="kickm" id="s10d" style="margin-bottom:10px">वार्षिक Package</div>
+      <div class="big en" id="s10e" style="font-size:104px;line-height:1.12">₹3,00,000<br>– ₹3,50,000</div>
+      <p class="sub" id="s10f" style="font-size:38px;margin-top:18px">चांगल्या performance वर</p>
+    </div>
+  </section>
+
+  <!-- ============ S11 DOCUMENTS ============ -->
+  <section class="scene" id="s11">
+    <div class="stack stackL">
+      <div class="kickm" id="s11k" style="margin-bottom:12px">📄 आवश्यक कागदपत्रे</div>
+      <h2 class="h2 y" id="s11h" style="font-size:60px;margin-bottom:34px">Interview साठी सोबत आणा</h2>
+      <div style="width:100%">
+        <div class="ck" id="s11a"><div class="bx">✓</div><div>Resume | 2 Photos | Aadhaar Card</div></div>
+        <div class="ck" id="s11b"><div class="bx">✓</div><div>Bank Passbook | PAN Card</div></div>
+        <div class="ck" id="s11c"><div class="bx">✓</div><div>10th T.C. | Engineering Marksheet</div></div>
+      </div>
+      <div class="chip gold" id="s11d" style="margin-top:34px;font-size:42px">प्रत्येकाच्या 2 Xerox copies</div>
+    </div>
+  </section>
+
+  <!-- ============ S12 CTA ============ -->
+  <section class="scene" id="s12">
+    <div class="art"><div class="ring" id="s12r" style="width:1200px;height:1200px;margin:-600px 0 0 -600px;border-color:rgba(255,198,26,.30)"></div></div>
+    <div class="stack">
+      <div class="badge" id="s12b">🌟</div>
+      <h1 class="h1" id="s12h" style="font-size:82px;margin:26px 0">तुमची सुवर्णसंधी<br>तुमची वाट पाहत आहे!</h1>
+      <div class="rule" id="s12r2"></div>
+      <div class="en" id="s12a" style="font-size:132px;font-weight:700;color:#FFC61A;letter-spacing:.02em;
+        text-shadow:0 0 60px rgba(255,198,26,.7)">APPLY NOW!</div>
+    </div>
+  </section>
+
+  <!-- ============ END SCREEN ============ -->
+  <div id="endscr">
+    <div id="e1" class="en" style="font-size:56px;font-weight:700;letter-spacing:.2em;color:#FFC61A">EAGLE HI-TECH</div>
+    <div id="e2" class="en" style="font-size:44px;font-weight:600;line-height:1.3;margin-top:16px;color:#EAF2FF">
+      Industrial Corporate Pvt. Ltd.</div>
+    <div id="e3" style="height:8px;width:0;background:#FFC61A;border-radius:99px;margin:38px 0"></div>
+    <div id="e4" class="en" style="font-size:42px;font-weight:600;letter-spacing:.1em;color:#A9C0E8">RECRUITMENT | JOB WORKS</div>
+    <div id="e5" style="margin-top:60px;font-size:40px;font-weight:600;color:#CFE0FF">📞 संपर्क</div>
+    <div id="e6" class="en" style="font-size:66px;font-weight:700;line-height:1.55;margin-top:14px;color:#fff">
+      8380828447<br>87998 81417<br>7083578521</div>
+    <div id="e7" style="margin-top:56px;font-size:38px;font-weight:600;color:#FFC61A">
+      📅 8 &amp; 9 सप्टेंबर 2026 · मातोश्री इंजिनिअरिंग कॉलेज, एकलहेरा</div>
+  </div>
+
+  <div id="pbwrap"><div id="pbar"></div></div>
+  <div id="bug"><div class="mk"></div><div class="tx">EAGLE HI-TECH</div></div>
+</div>
+
+<script>
+const DUR = 75, FPS = 30;
+const S = {s1:[0,6],s2:[6,12],s3:[12,17],s4:[17,23],s5:[23,28],s6:[28,36],
+           s7:[36,41],s8:[41,47],s9:[47,54],s10:[54,63],s11:[63,68],s12:[68,75]};
+const END_AT = 72.0;                       // end screen takes over
+const $ = id => document.getElementById(id);
+const cl = (v,a,b) => Math.min(b,Math.max(a,v));
+const E = {
+  lin: p=>p,
+  out: p=>1-Math.pow(1-p,3),
+  out5: p=>1-Math.pow(1-p,5),
+  io:  p=>p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2,
+  back:p=>{const c=1.70158,s=c+1;return 1+s*Math.pow(p-1,3)+c*Math.pow(p-1,2)},
+};
+// animation registry -------------------------------------------------------
+const A = [];
+function an(id,t0,d,from,to,ease){A.push({id,t0,t1:t0+d,from,to,ease:ease||E.out});}
+const els = new Map();
+function el(id){ if(!els.has(id)) els.set(id,$(id)); return els.get(id); }
+
+// per-element base state
+const BASE = {o:1,x:0,y:0,s:1,rot:0,w:null,blur:0};
+function apply(id,st){
+  const e = el(id); if(!e) return;
+  e.style.opacity = st.o;
+  let tr = '';
+  if(st.x||st.y) tr += `translate(${st.x}px,${st.y}px) `;
+  if(st.s!==1)   tr += `scale(${st.s}) `;
+  if(st.rot)     tr += `rotate(${st.rot}deg) `;
+  e.style.transform = tr;
+  e.style.width = (st.w===null ? '' : st.w+'px');
+  e.style.filter = st.blur ? `blur(${st.blur}px)` : '';
+}
+
+// ---- helpers to author quickly ----
+const IN_UP = (id,t0,d=.55,dy=46)=>an(id,t0,d,{o:0,y:dy},{o:1,y:0},E.out);
+const IN_L  = (id,t0,d=.55,dx=-70)=>an(id,t0,d,{o:0,x:dx},{o:1,x:0},E.out);
+const IN_R  = (id,t0,d=.55,dx=70)=>an(id,t0,d,{o:0,x:dx},{o:1,x:0},E.out);
+const POP   = (id,t0,d=.55)=>an(id,t0,d,{o:0,s:.72},{o:1,s:1},E.back);
+const OUT   = (id,t0,d=.35,dy=-30)=>an(id,t0,d,{o:1,y:0},{o:0,y:dy},E.io);
+const RULE  = (id,t0,d=.6,w=240)=>an(id,t0,d,{o:1,w:0},{o:1,w:w},E.out);
+
+// ---------------- S1 ----------------
+POP('s1b',0.15,.7); IN_UP('s1k',0.5,.5,20); IN_UP('s1h',0.7,.7,54);
+RULE('s1r',1.4,.6,300); IN_UP('s1s',1.7,.6,34);
+an('s1h',1.4,4.6,{o:1,s:1},{o:1,s:1.045},E.lin);
+an('r1',0,6,{o:.0,s:.55},{o:.55,s:1.5},E.out5);
+an('r2',.35,6,{o:.0,s:.55},{o:.40,s:1.5},E.out5);
+an('r3',.7,6,{o:.0,s:.55},{o:.28,s:1.5},E.out5);
+['s1b','s1k','s1h','s1r','s1s'].forEach((id,i)=>an(id,5.5,.45,{o:1,y:0},{o:0,y:-34},E.io));
+
+// ---------------- S2 ----------------
+an('s2art',6.0,1.1,{o:0,x:60},{o:1,x:0},E.out);
+IN_L('s2a',6.25,.5); IN_L('s2b',7.6,.55); IN_L('s2c',9.4,.55);
+an('s2art',6.6,5.2,{o:1,s:1},{o:1,s:1.09},E.lin);
+['s2a','s2b','s2c'].forEach(id=>an(id,11.55,.4,{o:1,x:0},{o:0,x:-60},E.io));
+an('s2art',11.4,.5,{o:1},{o:0},E.io);
+
+// ---------------- S3 ----------------
+IN_UP('s3k',12.1,.4,18); POP('s3d1',12.35,.6); POP('s3amp',12.6,.4); POP('s3d2',12.75,.6);
+IN_UP('s3yr',13.3,.5,26); RULE('s3r',13.7,.5,260); IN_UP('s3c',14.5,.55,34);
+an('s3d1',13.0,3.6,{o:1,y:0},{o:1,y:-10},E.io); an('s3d2',13.4,3.6,{o:1,y:0},{o:1,y:-10},E.io);
+['s3k','s3d1','s3amp','s3d2','s3yr','s3r','s3c'].forEach(id=>an(id,16.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S4 ----------------
+IN_UP('s4k',17.1,.4,18);
+an('s4sp',17.3,4.6,{o:1,y:0},{o:1,y:0},E.lin);   // height animated separately
+IN_L('s4s1',17.45,.5); IN_L('s4s2',18.75,.5); IN_L('s4s3',20.35,.5); IN_L('s4s4',21.6,.5);
+['s4k','s4s1','s4s2','s4s3','s4s4'].forEach(id=>an(id,22.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S5 ----------------
+IN_UP('s5k',23.1,.4,18); IN_UP('s5h',23.3,.55,40);
+[['s5c1',24.0],['s5c2',24.22],['s5c3',24.44],['s5c4',24.75],['s5c5',25.0]].forEach(([id,t])=>POP(id,t,.5));
+an('s5art',23.0,.8,{o:0},{o:1},E.out);
+['s5k','s5h','s5c1','s5c2','s5c3','s5c4','s5c5','s5art'].forEach(id=>an(id,27.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S6 ----------------
+IN_UP('s6k',28.15,.45,22);
+an('s6num',28.35,.55,{o:0,s:.7},{o:1,s:1},E.back);
+an('s6num',31.6,.35,{o:1,s:1.06},{o:1,s:1},E.out);   // punch when count lands
+POP('s6p',30.45,.55);
+an('s6k1',32.3,.5,{o:0,x:-50},{o:1,x:0},E.out);
+an('s6k2',34.0,.5,{o:0,x:-50},{o:1,x:0},E.out);
+an('s6r',28.2,7.4,{o:0,s:.5},{o:1,s:1.35},E.out5);
+['s6k','s6num','s6p','s6k1','s6k2','s6r'].forEach(id=>an(id,35.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S7 ----------------
+an('s7art',36.0,.7,{o:0},{o:1},E.out);
+IN_R('s7a',36.3,.55); IN_R('s7b',38.4,.55);
+['s7a','s7b','s7art'].forEach(id=>an(id,40.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S8 ----------------
+an('s8art',41.0,1.3,{o:0,x:-820},{o:1,x:0},E.out5);
+an('s8art',42.4,4.6,{o:1,x:0},{o:1,x:40},E.lin);
+IN_L('s8a',41.35,.5); IN_L('s8b',43.0,.5); IN_L('s8c',44.6,.5);
+['s8a','s8b','s8c','s8art'].forEach(id=>an(id,46.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S9 ----------------
+POP('s9b',47.2,.6); IN_UP('s9h',47.45,.55,36); IN_UP('s9s',47.9,.5,28);
+[['s9c1',49.8],['s9c2',50.0],['s9c3',50.25],['s9c4',51.6],['s9c5',51.8],['s9c6',52.0],['s9c7',52.2]]
+  .forEach(([id,t])=>POP(id,t,.45));
+an('s9art',47.0,.9,{o:0},{o:1},E.out);
+['s9b','s9h','s9s','s9c1','s9c2','s9c3','s9c4','s9c5','s9c6','s9c7','s9art']
+  .forEach(id=>an(id,53.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S10 ----------------
+IN_UP('s10k',54.15,.45,22); IN_UP('s10a',54.4,.6,40); IN_UP('s10b',56.4,.5,24);
+POP('s10c',58.4,.55); IN_UP('s10d',59.7,.4,18);
+an('s10e',60.0,.65,{o:0,s:.68},{o:1,s:1},E.back);
+an('s10e',60.65,.4,{o:1,s:1.05},{o:1,s:1},E.out);
+IN_UP('s10f',61.0,.5,22);
+['s10k','s10a','s10b','s10c','s10d','s10e','s10f'].forEach(id=>an(id,62.6,.35,{o:1},{o:0},E.io));
+
+// ---------------- S11 ----------------
+IN_UP('s11k',63.1,.4,18); IN_UP('s11h',63.3,.5,30);
+IN_L('s11a',64.2,.45); IN_L('s11b',65.4,.45); IN_L('s11c',66.4,.45); POP('s11d',67.0,.5);
+['s11k','s11h','s11a','s11b','s11c','s11d'].forEach(id=>an(id,67.55,.35,{o:1},{o:0},E.io));
+
+// ---------------- S12 ----------------
+POP('s12b',68.2,.6); IN_UP('s12h',68.4,.65,50); RULE('s12r2',69.4,.5,300);
+an('s12a',70.0,.6,{o:0,s:.7},{o:1,s:1},E.back);
+an('s12r',68.2,4.0,{o:0,s:.4},{o:.9,s:1.3},E.out5);
+['s12b','s12h','s12r2','s12a','s12r'].forEach(id=>an(id,71.7,.32,{o:1},{o:0},E.io));
+
+// ---------------- END SCREEN ----------------
+an('endscr',71.85,.45,{o:0},{o:1},E.out);
+IN_UP('e1',72.1,.45,26); IN_UP('e2',72.25,.45,22); RULE('e3',72.5,.45,300);
+IN_UP('e4',72.6,.4,18); IN_UP('e5',72.8,.4,18); IN_UP('e6',72.95,.5,26); IN_UP('e7',73.35,.45,20);
+
+for (const a of A){ if (a.to.o===0 && a.from.o===1){ a.t0 += 0.14; a.t1 = a.t0 + 0.26; } }
+
+// =========================== seek ===========================
+const ALL = new Set(A.map(a=>a.id));
+function seek(t){
+  // scenes on/off
+  for (const k in S){ const [a,b] = S[k];
+    $(k).classList.toggle('on', t >= a-0.6 && t < b+0.6); }
+  // reset
+  const st = new Map();
+  for (const id of ALL) st.set(id, {...BASE, o: (id==='endscr'?0:1)});
+  // pre-roll: anything that has an intro anim starts hidden
+  for (const a of A){ if (a.from.o !== undefined && t < a.t0 && a.from.o === 0) st.get(a.id).o = 0; }
+  for (const a of A){
+    if (t < a.t0) continue;
+    const p = a.ease(cl((t - a.t0)/(a.t1 - a.t0), 0, 1));
+    const cur = st.get(a.id);
+    for (const k in a.to){
+      const f = a.from[k] !== undefined ? a.from[k] : cur[mapk(k)];
+      cur[mapk(k)] = f + (a.to[k] - f) * p;
+    }
+  }
+  for (const [id, s] of st) apply(id, s);
+
+  // spine height (stepper)
+  const sp = cl((t-17.4)/4.4,0,1);
+  $('s4sp').style.height = (E.out(sp)*470)+'px';
+  // completed steps
+  [['s4s1',18.0],['s4s2',19.9],['s4s3',21.2],['s4s4',22.2]].forEach(([id,tt])=>
+    $(id).classList.toggle('done', t>=tt));
+  // salary counter
+  const cp = E.out(cl((t-28.5)/3.0,0,1));
+  $('s6num').textContent = '₹' + Math.round(cp*15000).toLocaleString('en-IN');
+  // checkbox fills
+  [['s6k1',32.6],['s6k2',34.3],['s11a',64.5],['s11b',65.7],['s11c',66.7]].forEach(([id,tt])=>
+    $(id).classList.toggle('on', t>=tt));
+  // background life
+  const gx = (t*11)%120, gy = (t*7)%120;
+  $('grid').style.transform  = `translate(${-gx}px,${-gy}px)`;
+  $('grid2').style.transform = `translate(${(t*4)%24}px,${(t*3)%24}px)`;
+  $('b1').style.transform = `translate(${Math.sin(t*.30)*90}px,${Math.cos(t*.24)*70}px)`;
+  $('b2').style.transform = `translate(${Math.cos(t*.26)*100}px,${Math.sin(t*.32)*80}px)`;
+  $('b3').style.transform = `translate(${Math.sin(t*.4)*60}px,${Math.cos(t*.34)*50}px) scale(${1+Math.sin(t*.6)*.12})`;
+  // gears + clock
+  $('g1').style.transform = `rotate(${t*16}deg)`;
+  $('g2').style.transform = `rotate(${-t*22}deg)`;
+  $('hh').style.transform = `rotate(${(t-36)*17}deg)`;
+  $('mh').style.transform = `rotate(${(t-36)*88}deg)`;
+  // warm tint during hostel scene
+  const warm = cl((t-47.0)/1.0,0,1) * (1-cl((t-53.2)/.8,0,1));
+  $('tint').style.opacity = warm*0.42;
+  // light sweep on scene changes
+  let sw = 0, swx = 0;
+  for (const k in S){ const a = S[k][0]; const d = t - a;
+    if (d >= 0 && d < .55){ sw = Math.sin((d/.55)*Math.PI)*.85; swx = (d/.55)*2100 - 700; } }
+  $('sweep').style.opacity = sw;
+  $('sweep').style.transform = `rotate(18deg) translateX(${swx}px)`;
+  // progress bar + bug
+  $('pbar').style.width = (cl(t/DUR,0,1)*1080)+'px';
+  const bugFade = t < END_AT-0.2 ? 1 : 0;
+  $('bug').style.opacity = 0.9*bugFade;
+  $('pbwrap').style.opacity = bugFade;
+}
+function mapk(k){ return k; }
+function remap(o){ const r={}; for(const k in o) r[mapk(k)] = o[k]; return r; }
+window.seek = seek;
+seek(0);
+</script></body></html>
